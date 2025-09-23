@@ -4,6 +4,10 @@ FROM python:3.12-slim
 # Set the working directory in the container
 WORKDIR /app
 
+# Prevent python from writing pyc files to disc
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
 # Copy the dependencies file to the working directory
 COPY requirements.txt .
 
