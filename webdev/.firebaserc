@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "cradlewave-aa74f"
-  }
+  },
+  "targets": {
+    "cradlewave-aa74f": {
+      "hosting": {
+        "CradleWave": [
+          "cradlewave-aa74f"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
