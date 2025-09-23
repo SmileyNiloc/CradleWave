@@ -4,17 +4,9 @@
   <ApiTest />
 </template>
 
-<script>
+<script setup>
 import HelloWorld from "./components/HelloWorld.vue";
-import ApiTest from "./components/apitest.vue";
-
-export default {
-  name: "App",
-  components: {
-    HelloWorld,
-    ApiTest,
-  },
-};
+import ApiTest from "./components/ApiTest.vue";
 </script>
 
 <style>
