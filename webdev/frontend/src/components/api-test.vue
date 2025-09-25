@@ -10,18 +10,15 @@ import { ref } from "vue";
 
 const response = ref(null);
 
-async function callApi() {
+const callApi = async () => {
   try {
-    console.log(process.env.VUE_APP_TEST_VAR); // ✅ works
-    console.log("API URL:");
-    console.log(process.env.VUE_APP_API_URL); // ✅ works
-    const res = await fetch(`${process.env.VUE_APP_API_URL}api/hello`);
-    const text = await res.text();
-    response.value = text;
+    const res = await fetch(`${process.env.VUE_APP_API_URL}/api/hello`);
+    const data = await res.json();
+    response.value = JSON.stringify(data);
   } catch (err) {
-    response.value = "Error: " + err;
+    response.value = "Error: " + err.message;
   }
-}
+};
 </script>
 
 <style scoped>

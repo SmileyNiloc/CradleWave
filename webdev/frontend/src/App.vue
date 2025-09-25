@@ -1,11 +1,10 @@
 <script setup>
 import ApiTest from "./components/api-test.vue";
 </script>
-
 <template>
+  <title>CradleWave</title>
   <ApiTest />
 </template>
-
 <style>
 #app {
   font-family: Avenir, Helvetica, Arial, sans-serif;

@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware # Import the middleware
 
-
 app = FastAPI()
 
 #List of origins that are allowed to make requests
