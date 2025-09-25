@@ -2,7 +2,6 @@
   <div>
     <button @click="callApi">Call API</button>
     <div v-if="response">Response: {{ response }}</div>
-    <p>change</p>
   </div>
 </template>
 
@@ -13,7 +12,7 @@ const response = ref(null);
 
 const callApi = async () => {
   try {
-    const res = await fetch("http://localhost:3047");
+    const res = await fetch(`${process.env.VUE_APP_API_URL}/api/hello`);
     const data = await res.json();
     response.value = JSON.stringify(data);
   } catch (err) {
