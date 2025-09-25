@@ -32,15 +32,16 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dist-files
-          path: ./dist
+      # - name: Download build artifact
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: dist-files
+      #     path: ./dist
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
-          reopToken: '${{ secrets.GITHUB_TOKEN }}'
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
           channelId: live
           projectId: 'cradlewave-aa74f'
+          entryPoint: ./webdev
