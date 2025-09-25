@@ -2,6 +2,7 @@
 import ApiTest from "./components/api-test.vue";
 </script>
 <template>
+  <title>CradleWave</title>
   <ApiTest />
 </template>
 <style>
