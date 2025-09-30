@@ -1,7 +1,7 @@
 {
   "hosting": {
     "target": "CradleWave",
-    "public": "./dist",
+    "public": "./frontend/dist",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
       {
