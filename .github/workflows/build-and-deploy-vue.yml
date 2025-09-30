@@ -46,3 +46,4 @@ jobs:
           channelId: live
           projectId: 'cradlewave-aa74f'
           entryPoint: ./webdev
+          target: CradleWave
