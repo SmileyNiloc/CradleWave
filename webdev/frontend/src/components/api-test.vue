@@ -2,6 +2,7 @@
   <div>
     <button @click="callApi">Call API</button>
     <div v-if="response">Response: {{ response }}</div>
+    <p>Succeffulyy auto-deployed with github actions</p>
   </div>
 </template>
 
