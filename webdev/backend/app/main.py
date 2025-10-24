@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware # Import the middleware
 
 app = FastAPI()
@@ -24,3 +24,10 @@ def hello():
 @app.get("/")
 def root():
     return {"message": "Welcome to the CradleWave API"}
+
+@app.post("/api/test")
+async def test_endpoint(request: Request):
+    req = await request.json()
+    response = {"message": "This is a test POST endpoint!",
+                "request": req}
+    return response
