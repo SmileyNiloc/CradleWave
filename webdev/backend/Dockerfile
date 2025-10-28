@@ -8,7 +8,7 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
-ENV CACHEBUST 1
+# ENV CACHEBUST 1
 
 # Copy the dependencies file to the working directory
 COPY requirements.txt .
