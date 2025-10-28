@@ -31,3 +31,7 @@ async def test_endpoint(request: Request):
     response = {"message": "This is a test POST endpoint!",
                 "request": req}
     return response
+@app.post("/")
+async def root_post(request: Request):
+    req = await request.json()
+    return req
