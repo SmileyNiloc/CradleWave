@@ -1,5 +1,18 @@
 steps:
   - name: gcr.io/cloud-builders/docker
-    args: ["build", "-t", "gcr.io/$PROJECT_ID/backend", "backend", "--no-cache"]
+    args: ["build", "-t", "gcr.io/$PROJECT_ID/backend", "backend"]
+  - name: gcr.io/cloud-builders/docker
+    args: ["push", "gcr.io/$PROJECT_ID/backend"]
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - cradlewave
+      - --image=gcr.io/$PROJECT_ID/cradlewave:$COMMIT_SHA
+      - --region=us-central1
+      - --platform=managed
+      - --quiet
+
 images:
   - "gcr.io/$PROJECT_ID/backend"
