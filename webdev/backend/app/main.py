@@ -25,17 +25,17 @@ def hello():
 def root():
     return {"message": "Welcome to the CradleWave API"}
 
-@app.get("/api/test2")
-def test_endpoint2():
-    return {"message": "This is a test GET endpoint!"}
+# @app.get("/api/test2")
+# def test_endpoint2():
+#     return {"message": "This is a test GET endpoint!"}
 
-@app.get("/api/test")
+@app.post("/api/test")
 async def test_endpoint(request: Request):
     req = await request.json()
     response = {"message": "This is a test POST endpoint (but using GET)!",
                 "request": req}
     return response
-@app.post("/")
-async def root_post(request: Request):
-    req = await request.json()
-    return req
+# @app.post("/")
+# async def root_post(request: Request):
+#     req = await request.json()
+#     return req
