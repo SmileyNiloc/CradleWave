@@ -8,8 +8,12 @@ module.exports = {
     "eslint:recommended",
     "plugin:prettier/recommended",
   ],
+  parser: "@babel/eslint-parser",
   parserOptions: {
-    parser: "@babel/eslint-parser",
+    requireOptions: False,
+    babelOptions: {
+      presets: ["@bable/preset-env"],
+    },
   },
   rules: {
     "no-console": process.env.NODE_ENV === "production" ? "warn" : "off",
