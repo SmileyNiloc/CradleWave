@@ -7,8 +7,8 @@ WebsocketsClient wsClient;
 const char* ssid     = "Hothspot";
 const char* pswd = "catenconnect";
 const String ws_host  = "wss://cradlewave-351958736605.us-central1.run.app/ws";
-// const uint16_t ws_port = 443;
-// const char* ws_path  = "/ws";
+String serialInputText = "";
+
 
 void onMessage(WebsocketsMessage message) {
   Serial.print("[WS] Message: ");
@@ -101,5 +101,22 @@ void loop() {
   }
 
   wsClient.poll();
-  delay(10);
+  // Check for serial input
+  while (Serial.available() > 0) {
+    char inChar = (char)Serial.read();
+    //When user presses enter
+    if (inChar == '\n') {
+      Serial.print("[SERIAL] Sending: ");
+      Serial.println(serialInputText);
+      if(serialInputText.length() == 0) continue;
+      if(serialInputText[0] == '0' && serialInputText[1] == 'b'){
+        wsClient.sendBinary(serialInputText.c_str()+2);
+      }
+      //Send the serial input over WebSocket
+      wsClient.send(serialInputText);
+      serialInputText = "";
+    } else {
+      serialInputText += inChar;
+    }
+  }
 }
