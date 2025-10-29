@@ -6,9 +6,9 @@ WebsocketsClient wsClient;
 
 const char* ssid     = "Hothspot";
 const char* pswd = "catenconnect";
-const String ws_host  = "wss://echo.websocket.org";
-const uint16_t ws_port = 443;
-const char* ws_path  = "/ws";
+const String ws_host  = "wss://cradlewave-351958736605.us-central1.run.app/ws";
+// const uint16_t ws_port = 443;
+// const char* ws_path  = "/ws";
 
 void onMessage(WebsocketsMessage message) {
   Serial.print("[WS] Message: ");
@@ -65,11 +65,10 @@ void connectWebSocket() {
   wsClient.onMessage(onMessage);
   wsClient.onEvent(onEvent);
 
-  Serial.print("[WS] Connecting to wss://");
-  Serial.print(ws_host);
-  Serial.print(":");
-  Serial.print(ws_port);
-  Serial.println(ws_path);
+  Serial.print("[WS] Connecting to ");
+  Serial.println(ws_host);
+  // Serial.print(ws_port);
+  // Serial.println(ws_path);
 
   if (wsClient.connect(ws_host)) {
     Serial.println("[WS] Handshake OK");
