@@ -1,5 +1,5 @@
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware # Import the middleware
+from fastapi import FastAPI, Request, WebSocket # pyright: ignore[reportMissingImports]
+from fastapi.middleware.cors import CORSMiddleware # pyright: ignore[reportMissingImports] # Import the middleware
 
 app = FastAPI()
 
@@ -17,6 +17,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+clients = set()
+
 @app.get("/api/hello")
 def hello():
     return {"message": "Hello, World!"}
@@ -31,3 +33,23 @@ async def test_endpoint(request: Request):
     response = {"message": "This is a test POST endpoint (but using GET)!",
                 "request": req}
     return response
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    clients.add(websocket)
+    print("Client connected")
+
+    try:
+        while True:
+            # Receive message from client
+            data = await websocket.receive_text()
+            print(f"Received: {data}")
+
+            # Broadcast message to all connected clients
+            for client in clients:
+                if client != websocket:
+                    await client.send_text(f"Echo: {data}")
+    except Exception as e:
+        print(f"Client disconnected: {e}")
+        clients.remove(websocket)
