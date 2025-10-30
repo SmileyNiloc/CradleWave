@@ -15,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
           cache: npm
           cache-dependency-path: webdev/frontend/package-lock.json
 
@@ -44,14 +44,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: dist-files
-          path: webdev/frontend/dist   # 🔑 matches firebase.json "public" path
+          path: webdev/frontend/dist # 🔑 matches firebase.json "public" path
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
-          repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          repoToken: "${{ secrets.GITHUB_TOKEN }}"
+          firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}"
           channelId: live
-          projectId: 'cradlewave-aa74f'
-          entryPoint: ./webdev
+          projectId: "cradlewave-aa74f"
+          entryPoint: ./webdev/frontend
           target: CradleWave
