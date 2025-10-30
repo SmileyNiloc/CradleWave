@@ -1,9 +1,11 @@
 <script setup>
 import ApiTest from "./components/api-test.vue";
+import firestore from "./components/firestore.vue";
 </script>
 <template>
   <title>CradleWave</title>
   <ApiTest />
+  <firestore />
 </template>
 <style>
 #app {

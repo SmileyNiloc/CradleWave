@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, WebSocket # pyright: ignore[reportMissingImports]
 from fastapi.middleware.cors import CORSMiddleware # pyright: ignore[reportMissingImports] # Import the middleware
-from dotenv import load_dotenv
+from dotenv import load_dotenv # pyright: ignore[reportMissingImports]
 import os
 import json
 
