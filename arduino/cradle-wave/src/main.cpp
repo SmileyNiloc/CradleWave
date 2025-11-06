@@ -1,122 +1,110 @@
-#include <WiFiNINA_Generic.h>
-#include <WebSockets2_Generic.h>
-using namespace websockets2_generic;
+// Simple SPI test for BGT60TRxx
+#include <Arduino.h>
+#include <SPI.h>
 
-WebsocketsClient wsClient;
+#define CS_PIN    7
+#define RESET_PIN 6
 
-const char* ssid     = "Hothspot";
-const char* pswd = "catenconnect";
-const String ws_host  = "wss://cradlewave-351958736605.us-central1.run.app/ws";
-String serialInputText = "";
-
-
-void onMessage(WebsocketsMessage message) {
-  Serial.print("[WS] Message: ");
-  Serial.println(message.data());
-}
-
-void onEvent(WebsocketsEvent event, String data) {
-  switch(event) {
-    case WebsocketsEvent::ConnectionOpened:
-      Serial.println("[WS] Connected!");
-      wsClient.send("Hello from SAMD21 via WSS!");
-      break;
-    case WebsocketsEvent::ConnectionClosed:
-      Serial.println("[WS] Disconnected!");
-      break;
-    case WebsocketsEvent::GotPing:
-      Serial.println("[WS] Got ping!");
-      break;
-    case WebsocketsEvent::GotPong:
-      Serial.println("[WS] Got pong!");
-      break;
-  }
-}
-
-// ====== WIFI CONNECT ======
-void connectWiFi() {
-  if (WiFi.status() == WL_NO_MODULE) {
-    Serial.println("[WiFi] No WiFi module found!");
-    while (true);
-  }
-
-  Serial.print("[WiFi] Connecting to ");
-  Serial.println(ssid);
-  WiFi.begin(ssid, pswd);
-
-  uint8_t attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
-    delay(500);
-    Serial.print(".");
-    attempts++;
-  }
-  Serial.println();
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("[WiFi] Connected! IP: ");
-    Serial.println(WiFi.localIP());
-  } else {
-    Serial.println("[WiFi] Connection failed!");
-  }
-}
-
-// ====== WEBSOCKET CONNECT ======
-void connectWebSocket() {
-  wsClient.onMessage(onMessage);
-  wsClient.onEvent(onEvent);
-
-  Serial.print("[WS] Connecting to ");
-  Serial.println(ws_host);
-  // Serial.print(ws_port);
-  // Serial.println(ws_path);
-
-  if (wsClient.connect(ws_host)) {
-    Serial.println("[WS] Handshake OK");
-  } else {
-    Serial.println("[WS] Connection failed");
-  }
-}
-
-// ====== SETUP ======
 void setup() {
-  Serial.begin(115200);
-  while (!Serial);
-
-  connectWiFi();
-  connectWebSocket();
+    Serial.begin(115200);
+    while (!Serial) delay(10);
+    
+    Serial.println("\n=== BGT60TRxx SPI Communication Test ===");
+    Serial.println("MKR WiFi 1010 - SPI Pins: MOSI=8, MISO=10, SCK=9");
+    Serial.print("CS Pin: "); Serial.println(CS_PIN);
+    Serial.print("Reset Pin: "); Serial.println(RESET_PIN);
+    Serial.println();
+    
+    // Initialize SPI and pins
+    SPI.begin();
+    pinMode(CS_PIN, OUTPUT);
+    pinMode(RESET_PIN, OUTPUT);
+    digitalWrite(CS_PIN, HIGH);
+    digitalWrite(RESET_PIN, HIGH);
+    
+    delay(100);
+    
+    // Hardware reset
+    Serial.println("Performing hardware reset...");
+    digitalWrite(CS_PIN, HIGH);
+    digitalWrite(RESET_PIN, LOW);
+    delay(10);
+    digitalWrite(RESET_PIN, HIGH);
+    delay(100);
+    Serial.println("Reset complete\n");
+    
+    // Try to read CHIP_ID register (address 0x02)
+    Serial.println("Attempting to read CHIP_ID register (0x02)...");
+    
+    SPISettings settings(1000000, MSBFIRST, SPI_MODE0);
+    SPI.beginTransaction(settings);
+    
+    // Prepare read command
+    // Format: 7-bit address + 1-bit R/W (0=read)
+    uint32_t cmd = 0x02 << 25;  // Address 0x02 in bits [31:25], R/W=0
+    
+    uint8_t tx[4], rx[4];
+    tx[0] = (cmd >> 24) & 0xFF;
+    tx[1] = (cmd >> 16) & 0xFF;
+    tx[2] = (cmd >> 8) & 0xFF;
+    tx[3] = cmd & 0xFF;
+    
+    Serial.print("TX bytes: ");
+    for (int i = 0; i < 4; i++) {
+        Serial.print("0x");
+        if (tx[i] < 0x10) Serial.print("0");
+        Serial.print(tx[i], HEX);
+        Serial.print(" ");
+    }
+    Serial.println();
+    
+    digitalWrite(CS_PIN, LOW);
+    delayMicroseconds(1);
+    
+    for (int i = 0; i < 4; i++) {
+        rx[i] = SPI.transfer(tx[i]);
+    }
+    
+    delayMicroseconds(1);
+    digitalWrite(CS_PIN, HIGH);
+    SPI.endTransaction();
+    
+    Serial.print("RX bytes: ");
+    for (int i = 0; i < 4; i++) {
+        Serial.print("0x");
+        if (rx[i] < 0x10) Serial.print("0");
+        Serial.print(rx[i], HEX);
+        Serial.print(" ");
+    }
+    Serial.println();
+    
+    uint32_t chip_id = (rx[1] << 16) | (rx[2] << 8) | rx[3];
+    chip_id &= 0x00FFFFFF;  // 24-bit data
+    
+    Serial.print("\nChip ID: 0x");
+    Serial.println(chip_id, HEX);
+    
+    uint8_t digital_id = (chip_id >> 16) & 0xFF;
+    uint8_t rf_id = (chip_id >> 8) & 0xFF;
+    
+    Serial.print("Digital ID: 0x");
+    Serial.println(digital_id, HEX);
+    Serial.print("RF ID: 0x");
+    Serial.println(rf_id, HEX);
+    
+    if (chip_id == 0 || chip_id == 0xFFFFFF) {
+        Serial.println("\nWARNING: Invalid chip ID!");
+        Serial.println("Possible issues:");
+        Serial.println("  - Sensor not connected");
+        Serial.println("  - Wrong pin assignments");
+        Serial.println("  - Power supply issue");
+        Serial.println("  - SPI wiring problem");
+    } else {
+        Serial.println("\nChip ID looks valid!");
+    }
 }
 
-// ====== MAIN LOOP ======
 void loop() {
-  // Keep WiFi alive
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("[WiFi] Lost connection, reconnecting...");
-    connectWiFi();
-  }
-
-  // Keep WebSocket alive
-  if (!wsClient.available()) {
-    Serial.println("[WS] Reconnecting...");
-    connectWebSocket();
-  }
-
-  wsClient.poll();
-  // Check for serial input
-  while (Serial.available() > 0) {
-    char inChar = (char)Serial.read();
-    //When user presses enter
-    if (inChar == '\n') {
-      Serial.print("[SERIAL] Sending: ");
-      Serial.println(serialInputText);
-      if(serialInputText.length() == 0) continue;
-      if(serialInputText[0] == '0' && serialInputText[1] == 'b'){
-        wsClient.sendBinary(serialInputText.c_str()+2);
-      }
-      //Send the serial input over WebSocket
-      wsClient.send(serialInputText);
-      serialInputText = "";
-    } else {
-      serialInputText += inChar;
-    }
-  }
+    delay(5000);
+    Serial.println("Test complete. Reset to run again.");
 }

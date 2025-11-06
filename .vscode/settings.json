@@ -1,0 +1,4 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/demo_board_python/demo_board/bin/python",
+  "python.terminal.activateEnvironment": true
+}
