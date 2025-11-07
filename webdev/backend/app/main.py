@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware # pyright: ignore[reportMissi
 from dotenv import load_dotenv # pyright: ignore[reportMissingImports]
 import os
 import json
+import msgpack
 
 from google.cloud import firestore  # pyright: ignore[reportMissingImports]
 
@@ -87,7 +88,8 @@ async def test_endpoint(request: Request):
                 "request": req}
     return response
 
-@app.websocket("/ws")
+
+@app.websocket("/ws/")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     clients.add(websocket)
@@ -103,6 +105,33 @@ async def websocket_endpoint(websocket: WebSocket):
             for client in clients:
                 if client != websocket:
                     await client.send_text(f"Echo: {data}")
+    except Exception as e:
+        print(f"Client disconnected: {e}")
+        clients.remove(websocket)
+
+@app.websocket("/ws/filtered")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    clients.add(websocket)
+    print("Client connected")
+
+    try:
+        while True:
+            # Receive message from client
+            data = await websocket.receive_bytes()
+            print(f"Received: {data}")
+
+            #unpack the binary data
+            unpacked_data = msgpack.unpackb(data)
+            print(f"Unpacked Data: {unpacked_data}")
+
+
+            # Connect to filtered_data collection
+            collection_name = "filtered_data"
+            doc_ref = db.collection(collection_name).document()
+            doc_ref.set(unpacked_data)
+            print(f"Data added to collection {collection_name} with ID {doc_ref.id}")
+
     except Exception as e:
         print(f"Client disconnected: {e}")
         clients.remove(websocket)

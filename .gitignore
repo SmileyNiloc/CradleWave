@@ -11,3 +11,7 @@ arduino/cradle-wave/lib/README
 arduino/cradle-wave/test/README
 webdev/backend/cradlewave-aa74f-firebase-adminsdk-fbsvc-549aa6f4fb.json
 demo_board_python/demo_board
+arduino/cradle-wave/src/main.cpp.bak
+demo_board_python/helpers/__pycache__/DopplerAlgo.cpython-312.pyc
+demo_board_python/helpers/__pycache__/fft_spectrum.cpython-312.pyc
+demo_board_python/helpers/__pycache__/websockets.cpython-312.pyc

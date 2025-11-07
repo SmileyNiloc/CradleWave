@@ -16,6 +16,14 @@ from ifxradarsdk.fmcw.types import FmcwSimpleSequenceConfig, FmcwMetrics
 from helpers.DopplerAlgo import *
 
 
+#Definitions for websocket client
+from helpers.websockets import WebSocketClient
+import asyncio
+
+WEBSOCKET_URL = "https://cradlewave-351958736605.us-central1.run.app/ws/filtered"
+
+
+
 # -------------------------------------------------
 # Signal Processing Methods
 # -------------------------------------------------
@@ -262,7 +270,10 @@ def linear_to_dB(x):
 # -------------------------------------------------
 # Main logic
 # -------------------------------------------------
-if __name__ == '__main__':
+async def main():
+    client = WebSocketClient(WEBSOCKET_URL)
+    asyncio.create_task(client.connect())
+
     args = parse_program_arguments(
         '''FMCW Radar Signal Monitoring (Filtered Only)''',
         def_nframes=150,
@@ -350,13 +361,18 @@ if __name__ == '__main__':
         # Initialize plot with processed data
         for filt in initial_result['smoothed']: # smoothed
             rt_plot.add_data(filt)
-        
+            #test websocket by sending initial data (not 100% realistic, but will test queueing)
+            await client.send_data(initial_result)
+
+
         frame_counter = collect_frames
         dropped_frames = 0
         last_time = time.time()
         last_hr_time = time.time()
         hr_interval = 10.0  # Print heart rate every 10 seconds
         
+
+
         while rt_plot.is_open():
             try:
                 frame_start = time.time()
@@ -383,6 +399,9 @@ if __name__ == '__main__':
                 result = processor.process_signal_pipeline(
                     np.array(raw_signal_buffer))
                 rt_plot.add_data(result['smoothed'][-1]) # smoothed
+                # print(f"Debug: Frame {frame_counter}, Filtered Value: {result['mti_filtered'][-1]:.3f}")
+                # Send the frame_countner and the result(and array with a couple different values) to backedn via websocket
+
                 
                 frame_counter += 1
                 
@@ -435,3 +454,6 @@ if __name__ == '__main__':
         print(f"Application finished")
         print(f"Total frames: {frame_counter}, Dropped: {dropped_frames}")
         print(f"{'='*60}")
+
+if __name__ == '__main__':
+    asyncio.run(main())
