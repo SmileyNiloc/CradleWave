@@ -20,9 +20,8 @@ from helpers.DopplerAlgo import *
 from helpers.websockets import WebSocketClient
 import asyncio
 
-WEBSOCKET_URL = "https://cradlewave-351958736605.us-central1.run.app/ws/filtered"
-
-
+# WebSocket URL (use wss:// for secure WebSocket, not https://)
+WEBSOCKET_URL = "wss://cradlewave-351958736605.us-central1.run.app/ws/filtered"
 
 # -------------------------------------------------
 # Signal Processing Methods
@@ -272,7 +271,9 @@ def linear_to_dB(x):
 # -------------------------------------------------
 async def main():
     client = WebSocketClient(WEBSOCKET_URL)
-    asyncio.create_task(client.connect())
+    # asyncio.create_task(client.connect())
+    await client.connect()
+    await asyncio.sleep(0.1)  # Let the event loop start async tasks
 
     args = parse_program_arguments(
         '''FMCW Radar Signal Monitoring (Filtered Only)''',
@@ -362,7 +363,9 @@ async def main():
         for filt in initial_result['smoothed']: # smoothed
             rt_plot.add_data(filt)
             #test websocket by sending initial data (not 100% realistic, but will test queueing)
-            await client.send_data(initial_result)
+            # for key, item in initial_result.items():
+        
+        await client.send_data(initial_result)
 
 
         frame_counter = collect_frames
@@ -371,6 +374,9 @@ async def main():
         last_hr_time = time.time()
         hr_interval = 10.0  # Print heart rate every 10 seconds
         
+
+        #clear queue before starting real-time loop
+        await client.wait_until_done()
 
 
         while rt_plot.is_open():
@@ -417,7 +423,7 @@ async def main():
                 frame_time = time.time() - frame_start
                 expected_time = 1.0 / args.frate
                 if frame_time < expected_time:
-                    time.sleep(expected_time - frame_time)
+                    await asyncio.sleep(expected_time - frame_time)
                 
                 # Status update
                 if frame_counter % 30 == 0:
@@ -441,7 +447,7 @@ async def main():
                     dropped_frames += 1
                     if dropped_frames % 10 == 1:
                         print(f"Warning: Frame dropped (total: {dropped_frames})")
-                    time.sleep(0.01)
+                    await asyncio.sleep(0.01)
                     continue
                 else:
                     print(f"Error: {e}")
