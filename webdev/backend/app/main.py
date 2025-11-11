@@ -167,12 +167,16 @@ async def websocket_endpoint(websocket: WebSocket):
                   .document(session_id)
             ) 
             # Ensure session document exists
-            session_ref.set({
+            if not session_ref.get():
+                session_ref.set({
                 "session_id": session_id,
                 "user_id": user_id,
-                "heart_rate_data": []
-            }, merge=True)
+                }, merge=True)
 
+            session_ref.collection("heart_rate_data").add({
+                "time": data.get("time"),
+                "heart_rate": data.get("heart_rate")
+            })
 
             # Append to array field
             session_ref.update({
