@@ -21,7 +21,7 @@ from helpers.websockets import WebSocketClient
 import asyncio
 
 # WebSocket URL (use wss:// for secure WebSocket, not https://)
-WEBSOCKET_URL = "wss://cradlewave-351958736605.us-central1.run.app/ws/filtered"
+WEBSOCKET_URL = "wss://cradlewave-351958736605.us-central1.run.app/ws/heart_rate"
 
 # -------------------------------------------------
 # Signal Processing Methods

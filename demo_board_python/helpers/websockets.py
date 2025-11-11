@@ -2,7 +2,8 @@ from asyncio import Queue, create_task, sleep as io_sleep
 import websockets
 import msgpack
 import numpy as np
-
+import time
+import datetime, secrets
 
 class WebSocketClient:
     def __init__(self, url):
@@ -11,6 +12,7 @@ class WebSocketClient:
         self.queue = Queue()
         self.connected = False
         self.total_sent = 0
+        self.session_id = self.generate_session_id()
         print(f"[WebSocket] Initialized with URL: {url}")
 
     async def connect(self):
@@ -54,8 +56,18 @@ class WebSocketClient:
 
                     #Make data JSON safe
                     safe_data = self.make_json_safe(data)
+
+                    #Add Metadata
+                    structure = {
+                        "user": "demo_board",
+                        "session_id": self.session_id,
+                        "timestamp": time.time(),
+                        "data": safe_data,
+
+                    }
+
                     # Pack data using msgpack
-                    packed_data = msgpack.packb(safe_data)
+                    packed_data = msgpack.packb(structure)
 
                     data_size = len(packed_data)
                     print(f"[WebSocket] Packed data size: {data_size} bytes")
@@ -99,3 +111,8 @@ class WebSocketClient:
             return [self.make_json_safe(v) for v in obj]
         else:
             return obj
+
+    def generate_session_id(self, prefix="session"):
+        now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        rand = secrets.token_hex(3)  # 6 hex chars (~1M combinations)
+        return f"{prefix}_{now}_{rand}"

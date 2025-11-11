@@ -4,6 +4,7 @@ from dotenv import load_dotenv # pyright: ignore[reportMissingImports]
 import os
 import json
 import msgpack
+import time, datetime
 
 from google.cloud import firestore  # pyright: ignore[reportMissingImports]
 
@@ -131,6 +132,50 @@ async def websocket_endpoint(websocket: WebSocket):
             doc_ref = db.collection(collection_name).document()
             doc_ref.set(unpacked_data)
             print(f"Data added to collection {collection_name} with ID {doc_ref.id}")
+
+    except Exception as e:
+        print(f"Client disconnected: {e}")
+        clients.remove(websocket)
+
+@app.websocket("/ws/heart_rate")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    clients.add(websocket)
+    print("Client connected")
+
+    try:
+        while True:
+            # Receive message from client
+            data = await websocket.receive_bytes()
+            print(f"Received: {data}")
+
+            #unpack the binary data
+            unpacked_data = msgpack.unpackb(data)
+            print(f"Unpacked Data: {unpacked_data}")
+
+            user_id = unpacked_data.get("user", "unknown_user")
+            session_id = unpacked_data.get("session_id", "unknown_session")
+            timestamp = unpacked_data.get("timestamp", time.time())
+            data = unpacked_data.get("data", {})
+
+            # Build Firestore path:
+            # users/{user_id}/sessions/{session_id}/heart_rate
+            collection_ref = (
+                db.collection("users")
+                  .document(user_id)
+                  .collection("sessions")
+                  .document(session_id)
+                  .collection("heart_rate")
+            )
+
+            # Add this new heart rate datapoint
+            collection_ref.add({
+                # "timestamp": datetime.fromtimestamp(timestamp),
+                "data": data
+            })
+
+            print(f"Added HR data for {user_id}/{session_id} at {timestamp}")
+
 
     except Exception as e:
         print(f"Client disconnected: {e}")
