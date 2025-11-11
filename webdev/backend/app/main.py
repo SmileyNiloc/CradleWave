@@ -167,23 +167,25 @@ async def websocket_endpoint(websocket: WebSocket):
                   .document(session_id)
             ) 
             # Ensure session document exists
-            if not session_ref.get():
+            if not session_ref.get().exists:
                 session_ref.set({
                 "session_id": session_id,
                 "user_id": user_id,
                 }, merge=True)
+                print(f"Created session doc for {user_id}/{session_id}")
+
 
             session_ref.collection("heart_rate_data").add({
                 "time": data.get("time"),
                 "heart_rate": data.get("heart_rate")
             })
 
-            # Append to array field
-            session_ref.update({
-                "heart_rate_data": firestore.ArrayUnion([
-                    {"time": data.get("time"), 
-                     "heart_rate": data.get("heart_rate")}])
-            })
+            # # Append to array field
+            # session_ref.update({
+            #     "heart_rate_data": firestore.ArrayUnion([
+            #         {"time": data.get("time"), 
+            #          "heart_rate": data.get("heart_rate")}])
+            # })
 
             print(f"Added HR data for {user_id}/{session_id} at {timestamp}")
 
