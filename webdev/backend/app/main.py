@@ -166,10 +166,19 @@ async def websocket_endpoint(websocket: WebSocket):
                   .collection("sessions")
                   .document(session_id)
             ) 
+            # Ensure session document exists
+            session_ref.set({
+                "session_id": session_id,
+                "user_id": user_id,
+                "heart_rate_data": []
+            }, merge=True)
+
 
             # Append to array field
             session_ref.update({
-                "heart_rate_data": firestore.ArrayUnion([{"time": data.get("time"), "heart_rate": data.get("heart_rate")}])
+                "heart_rate_data": firestore.ArrayUnion([
+                    {"time": data.get("time"), 
+                     "heart_rate": data.get("heart_rate")}])
             })
 
             print(f"Added HR data for {user_id}/{session_id} at {timestamp}")
