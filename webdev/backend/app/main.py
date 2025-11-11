@@ -160,18 +160,16 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # Build Firestore path:
             # users/{user_id}/sessions/{session_id}/heart_rate
-            collection_ref = (
+            session_ref = (
                 db.collection("users")
                   .document(user_id)
                   .collection("sessions")
                   .document(session_id)
-                  .collection("heart_rate")
-            )
+            ) 
 
-            # Add this new heart rate datapoint
-            collection_ref.add({
-                # "timestamp": datetime.fromtimestamp(timestamp),
-                "data": data
+            # Append to array field
+            session_ref.update({
+                "heart_rate_data": firestore.ArrayUnion([{"time": data.get("time"), "heart_rate": data.get("heart_rate")}])
             })
 
             print(f"Added HR data for {user_id}/{session_id} at {timestamp}")
