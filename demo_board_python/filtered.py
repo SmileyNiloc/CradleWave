@@ -365,7 +365,7 @@ async def main():
             #test websocket by sending initial data (not 100% realistic, but will test queueing)
             # for key, item in initial_result.items():
         
-        await client.send_data(initial_result)
+        # await client.send_data(initial_result)
 
 
         frame_counter = collect_frames
@@ -408,7 +408,6 @@ async def main():
                 # print(f"Debug: Frame {frame_counter}, Filtered Value: {result['mti_filtered'][-1]:.3f}")
                 # Send the frame_countner and the result(and array with a couple different values) to backedn via websocket
 
-                
                 frame_counter += 1
                 
                 # Heart rate estimation every 10 seconds
@@ -418,7 +417,8 @@ async def main():
                     print(f"*** Heart Rate Estimate: {hr_bpm:.1f} BPM ***")
                     print(f"{'='*60}\n")
                     last_hr_time = time.time()
-                
+                    await client.send_data({"time":last_hr_time,
+                                            "heart_rate":hr_bpm})                  
                 # Timing management
                 frame_time = time.time() - frame_start
                 expected_time = 1.0 / args.frate
@@ -460,6 +460,7 @@ async def main():
         print(f"Application finished")
         print(f"Total frames: {frame_counter}, Dropped: {dropped_frames}")
         print(f"{'='*60}")
+        await client.wait_until_done()
 
 if __name__ == '__main__':
     asyncio.run(main())
