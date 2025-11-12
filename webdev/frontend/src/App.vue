@@ -1,11 +1,11 @@
 <script setup>
 // import ApiTest from "./components/api-test.vue";
-import usertree from "./components/usertree.vue";
+import devicetree from "./components/devicetree.vue";
 import hrGraph from "./components/hrGraph.vue";
 import { reactive, provide } from "vue";
 
 const selection = reactive({
-  userId: null,
+  deviceId: null,
   sessionId: null,
 });
 provide("selectedSession", selection);
@@ -25,15 +25,15 @@ provide("selectedSession", selection);
     <main class="main-content">
       <div class="content-grid">
         <aside class="sidebar">
-          <usertree />
+          <devicetree />
         </aside>
 
         <section class="graph-section">
           <hrGraph />
           <div v-if="selection.sessionId" class="session-info">
             <div class="info-card">
-              <span class="info-label">User ID:</span>
-              <span class="info-value">{{ selection.userId }}</span>
+              <span class="info-label">Device ID:</span>
+              <span class="info-value">{{ selection.deviceId }}</span>
             </div>
             <div class="info-card">
               <span class="info-label">Session ID:</span>

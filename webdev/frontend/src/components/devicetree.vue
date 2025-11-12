@@ -1,42 +1,45 @@
 <template>
-  <div class="usertree-container">
-    <h2 class="usertree-title">Users & Sessions</h2>
+  <div class="devicetree-container">
+    <h2 class="devicetree-title">Devices & Sessions</h2>
 
-    <div v-if="users.length === 0" class="loading-state">
+    <div v-if="devices.length === 0" class="loading-state">
       <div class="loader"></div>
-      <p>Loading users...</p>
+      <p>Loading devices...</p>
     </div>
 
-    <ul class="user-list" v-else>
-      <li v-for="user in users" :key="user.id" class="user-item">
+    <ul class="device-list" v-else>
+      <li v-for="device in devices" :key="device.id" class="device-item">
         <div
-          class="user-header"
-          @click="toggleUser(user)"
-          :class="{ expanded: user.expanded }"
+          class="device-header"
+          @click="toggleDevices(device)"
+          :class="{ expanded: device.expanded }"
         >
-          <span class="expand-icon">{{ user.expanded ? "▼" : "▶" }}</span>
-          <span class="user-id">{{ user.id }}</span>
+          <span class="expand-icon">{{ device.expanded ? "▼" : "▶" }}</span>
+          <span class="device-id">{{ device.id }}</span>
         </div>
 
-        <ul v-if="user.expanded" class="session-list">
+        <ul v-if="device.expanded" class="session-list">
           <li
-            v-for="session in user.sessions || []"
+            v-for="session in device.sessions || []"
             :key="session.id"
             class="session-item"
           >
             <div class="session-content">
               <span class="session-id">{{ session.id }}</span>
               <button
-                @click="selectSession(user.id, session.id)"
+                @click="selectSession(device.id, session.id)"
                 class="select-btn"
-                :class="{ active: isSelected(user.id, session.id) }"
+                :class="{ active: isSelected(device.id, session.id) }"
               >
-                {{ isSelected(user.id, session.id) ? "✓ Active" : "View" }}
+                {{ isSelected(device.id, session.id) ? "✓ Active" : "View" }}
               </button>
             </div>
           </li>
 
-          <li v-if="user.expanded && !user.sessions" class="loading-sessions">
+          <li
+            v-if="device.expanded && !device.sessions"
+            class="loading-sessions"
+          >
             <div class="mini-loader"></div>
             Loading sessions...
           </li>
@@ -53,13 +56,13 @@ import { db } from "../utils/firebase.js";
 
 const selectedSession = inject("selectedSession");
 
-const users = reactive([]);
+const devices = reactive([]);
 
-// Load all users initially
-async function loadUsers() {
-  const usersSnapshot = await getDocs(collection(db, "users"));
-  usersSnapshot.forEach((doc) => {
-    users.push({
+// Load all devices initially
+async function loadDevices() {
+  const devicesSnapshot = await getDocs(collection(db, "devices"));
+  devicesSnapshot.forEach((doc) => {
+    devices.push({
       id: doc.id,
       expanded: false,
       sessions: null, // null means not loaded yet
@@ -67,51 +70,52 @@ async function loadUsers() {
   });
 }
 
-loadUsers();
+loadDevices();
 
-// Toggle user dropdown and lazy-load sessions if not already loaded
-async function toggleUser(user) {
-  user.expanded = !user.expanded;
+// Toggle devices dropdown and lazy-load sessions if not already loaded
+async function toggleDevices(device) {
+  device.expanded = !device.expanded;
 
-  if (user.expanded && user.sessions === null) {
+  if (device.expanded && device.sessions === null) {
     const sessionsSnapshot = await getDocs(
-      collection(db, "users", user.id, "sessions")
+      collection(db, "devices", device.id, "sessions")
     );
-    user.sessions = sessionsSnapshot.docs.map((s) => ({
+    device.sessions = sessionsSnapshot.docs.map((s) => ({
       id: s.id,
       ...s.data(),
     }));
   }
 }
 
-function selectSession(userId, sessionId) {
+function selectSession(deviceId, sessionId) {
   // If clicking the same session again, deselect it
   if (
-    selectedSession.userId === userId &&
+    selectedSession.deviceId === deviceId &&
     selectedSession.sessionId === sessionId
   ) {
-    selectedSession.userId = null;
+    selectedSession.deviceId = null;
     selectedSession.sessionId = null;
   } else {
     // Otherwise, select the new session
-    selectedSession.userId = userId;
+    selectedSession.deviceId = deviceId;
     selectedSession.sessionId = sessionId;
   }
 }
 
-function isSelected(userId, sessionId) {
+function isSelected(deviceId, sessionId) {
   return (
-    selectedSession.userId === userId && selectedSession.sessionId === sessionId
+    selectedSession.deviceId === deviceId &&
+    selectedSession.sessionId === sessionId
   );
 }
 </script>
 
 <style scoped>
-.usertree-container {
+.devicetree-container {
   width: 100%;
 }
 
-.usertree-title {
+.devicetree-title {
   font-size: 1.25rem;
   font-weight: 600;
   color: #2c3e50;
@@ -148,16 +152,16 @@ function isSelected(userId, sessionId) {
   }
 }
 
-.user-list {
+.device-list {
   list-style: none;
   padding: 0;
 }
 
-.user-item {
+.device-item {
   margin-bottom: 0.5rem;
 }
 
-.user-header {
+.device-header {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -172,12 +176,12 @@ function isSelected(userId, sessionId) {
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
-.user-header:hover {
+.device-header:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
-.user-header.expanded {
+.device-header.expanded {
   border-radius: 10px 10px 0 0;
 }
 
@@ -187,11 +191,11 @@ function isSelected(userId, sessionId) {
   display: inline-block;
 }
 
-.user-header.expanded .expand-icon {
+.device-header.expanded .expand-icon {
   transform: rotate(0deg);
 }
 
-.user-id {
+.device-id {
   font-size: 0.95rem;
   flex: 1;
 }

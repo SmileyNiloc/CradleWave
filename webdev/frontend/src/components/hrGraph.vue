@@ -7,7 +7,7 @@
   <div v-else class="empty-state">
     <div class="empty-icon">📊</div>
     <h3>No Session Selected</h3>
-    <p>Select a user and session from the sidebar to view heart rate data</p>
+    <p>Select a device and session from the sidebar to view heart rate data</p>
   </div>
 </template>
 
@@ -52,8 +52,8 @@ watch(
 
     const readingsRef = collection(
       db,
-      "users",
-      newVal.userId,
+      "devices",
+      newVal.deviceId,
       "sessions",
       newVal.sessionId,
       "heart_rate_data"
