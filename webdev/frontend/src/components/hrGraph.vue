@@ -1,11 +1,11 @@
 <template>
-  <div>
+  <div v-if="selectedSession.sessionId != null">
     <Line :data="chartData" :options="chartOptions" />
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, inject, watch, reactive } from "vue";
 import {
   Chart as ChartJS,
   Title,
@@ -33,29 +33,51 @@ ChartJS.register(
   TimeScale
 );
 
-const userId = "demo_user";
-const sessionId = "session_20251111_170353_fa78cc";
-const readingsRef = collection(
-  db,
-  "users",
-  userId,
-  "sessions",
-  sessionId,
-  "heart_rate_data"
+let heartRateData = reactive({
+  collection: useCollection(),
+});
+
+const selectedSession = inject("selectedSession");
+watch(
+  () => selectedSession,
+  (newVal) => {
+    const readingsRef = collection(
+      db,
+      "users",
+      newVal.userId,
+      "sessions",
+      newVal.sessionId,
+      "heart_rate_data"
+    );
+    const q = query(readingsRef, orderBy("time"));
+    heartRateData.collection = useCollection(q);
+    console.log("Heart Rate Data Updated:", heartRateData.value);
+  },
+  { deep: true }
 );
-const q = query(readingsRef, orderBy("time"));
-const heartRateData = useCollection(q);
 
 const chartData = computed(() => ({
-  labels: heartRateData.value.map((d) =>
+  labels: heartRateData.collection.map((d) =>
     new Date(d.time * 1000).toLocaleTimeString()
   ),
   datasets: [
-    { label: "Heart Rate", data: heartRateData.value.map((d) => d.heart_rate) },
+    {
+      label: "Heart Rate",
+      data: heartRateData.collection.map((d) => d.heart_rate),
+    },
   ],
 }));
 
-const chartOptions = ref({ responseive: true });
+watch(
+  () => heartRateData.collection,
+  (newVal) => {
+    if (newVal.length > 10) {
+      heartRateData.collection.splice(0, newVal.length - 50);
+    }
+  }
+);
+
+const chartOptions = ref({ responsive: true });
 </script>
 
 <style scoped>
