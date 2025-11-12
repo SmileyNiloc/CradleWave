@@ -153,16 +153,16 @@ async def websocket_endpoint(websocket: WebSocket):
             unpacked_data = msgpack.unpackb(data)
             print(f"Unpacked Data: {unpacked_data}")
 
-            user_id = unpacked_data.get("user", "unknown_user")
+            device_id = unpacked_data.get("device", "unknown_user")
             session_id = unpacked_data.get("session_id", "unknown_session")
             timestamp = unpacked_data.get("timestamp", time.time())
             data = unpacked_data.get("data", {})
 
             # Build Firestore path:
-            # users/{user_id}/sessions/{session_id}/heart_rate
+            # devices/{device_id}/sessions/{session_id}/heart_rate
             session_ref = (
-                db.collection("users")
-                  .document(user_id)
+                db.collection("devices")
+                  .document(device_id)
                   .collection("sessions")
                   .document(session_id)
             ) 
@@ -170,9 +170,9 @@ async def websocket_endpoint(websocket: WebSocket):
             if not session_ref.get().exists:
                 session_ref.set({
                 "session_id": session_id,
-                "user_id": user_id,
+                "user_id": device_id,
                 }, merge=True)
-                print(f"Created session doc for {user_id}/{session_id}")
+                print(f"Created session doc for {device_id}/{session_id}")
 
 
             session_ref.collection("heart_rate_data").add({
@@ -187,7 +187,7 @@ async def websocket_endpoint(websocket: WebSocket):
             #          "heart_rate": data.get("heart_rate")}])
             # })
 
-            print(f"Added HR data for {user_id}/{session_id} at {timestamp}")
+            print(f"Added HR data for {device_id}/{session_id} at {timestamp}")
 
 
     except Exception as e:

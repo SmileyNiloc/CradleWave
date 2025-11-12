@@ -59,7 +59,7 @@ class WebSocketClient:
 
                     #Add Metadata
                     structure = {
-                        "user": "demo_board",
+                        "device": "demo_board",
                         "session_id": self.session_id,
                         "timestamp": time.time(),
                         "data": safe_data,
