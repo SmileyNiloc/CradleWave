@@ -1,51 +1,74 @@
 <template>
   <div class="devicetree-container">
-    <h2 class="devicetree-title">Devices & Sessions</h2>
+    <h2 class="devicetree-title">Devices</h2>
 
     <div v-if="devices.length === 0" class="loading-state">
       <div class="loader"></div>
       <p>Loading devices...</p>
     </div>
 
-    <ul class="device-list" v-else>
-      <li v-for="device in devices" :key="device.id" class="device-item">
-        <div
-          class="device-header"
-          @click="toggleDevices(device)"
-          :class="{ expanded: device.expanded }"
-        >
-          <span class="expand-icon">{{ device.expanded ? "▼" : "▶" }}</span>
-          <span class="device-id">{{ device.id }}</span>
+    <div class="device-grid" v-else>
+      <div
+        v-for="device in devices"
+        :key="device.id"
+        class="device-card"
+        :class="{ active: isDeviceActive(device.id) }"
+      >
+        <div class="card-main" @click="selectDeviceLatestSession(device)">
+          <div class="device-icon">📶</div>
+          <div class="device-info">
+            <h3 class="device-name">{{ device.id }}</h3>
+            <p class="device-status">
+              {{
+                device.sessions && device.sessions.length > 0
+                  ? `${device.sessions.length} session${
+                      device.sessions.length !== 1 ? "s" : ""
+                    }`
+                  : "No sessions"
+              }}
+            </p>
+          </div>
+          <div
+            v-if="device.sessions && device.sessions.length > 0"
+            class="latest-badge"
+          >
+            Latest
+          </div>
         </div>
 
-        <ul v-if="device.expanded" class="session-list">
-          <li
+        <div class="card-actions">
+          <button
+            class="dropdown-btn"
+            @click.stop="toggleSessions(device)"
+            :class="{ expanded: device.expanded }"
+            :disabled="!device.sessions || device.sessions.length === 0"
+          >
+            <span class="dropdown-icon">{{ device.expanded ? "▲" : "▼" }}</span>
+            <span>Sessions</span>
+          </button>
+        </div>
+
+        <div v-if="device.expanded" class="session-dropdown">
+          <div
             v-for="session in device.sessions || []"
             :key="session.id"
-            class="session-item"
+            class="session-row"
+            :class="{ selected: isSelected(device.id, session.id) }"
+            @click="selectSession(device.id, session.id)"
           >
-            <div class="session-content">
-              <span class="session-id">{{ session.id }}</span>
-              <button
-                @click="selectSession(device.id, session.id)"
-                class="select-btn"
-                :class="{ active: isSelected(device.id, session.id) }"
-              >
-                {{ isSelected(device.id, session.id) ? "✓ Active" : "View" }}
-              </button>
-            </div>
-          </li>
+            <span class="session-label">{{ session.id }}</span>
+            <span v-if="isSelected(device.id, session.id)" class="check-icon"
+              >✓</span
+            >
+          </div>
 
-          <li
-            v-if="device.expanded && !device.sessions"
-            class="loading-sessions"
-          >
+          <div v-if="!device.sessions" class="loading-sessions">
             <div class="mini-loader"></div>
-            Loading sessions...
-          </li>
-        </ul>
-      </li>
-    </ul>
+            Loading...
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -58,35 +81,58 @@ const selectedSession = inject("selectedSession");
 
 const devices = reactive([]);
 
-// Load all devices initially
+// Load all devices initially and their sessions
 async function loadDevices() {
   const devicesSnapshot = await getDocs(collection(db, "devices"));
-  devicesSnapshot.forEach((doc) => {
-    devices.push({
+  for (const doc of devicesSnapshot.docs) {
+    const device = {
       id: doc.id,
       expanded: false,
-      sessions: null, // null means not loaded yet
+      sessions: null,
+    };
+
+    // Load sessions immediately for each device
+    await loadDeviceSessions(device);
+    devices.push(device);
+  }
+}
+
+// Load sessions for a specific device
+async function loadDeviceSessions(device) {
+  const sessionsSnapshot = await getDocs(
+    collection(db, "devices", device.id, "sessions")
+  );
+  device.sessions = sessionsSnapshot.docs
+    .map((s) => ({
+      id: s.id,
+      ...s.data(),
+    }))
+    .sort((a, b) => {
+      // Sort by session ID in descending order (most recent first)
+      // Session IDs are in format: session_YYYYMMDD_HHMMSS_xxxxx
+      return b.id.localeCompare(a.id);
     });
-  });
 }
 
 loadDevices();
 
-// Toggle devices dropdown and lazy-load sessions if not already loaded
-async function toggleDevices(device) {
-  device.expanded = !device.expanded;
-
-  if (device.expanded && device.sessions === null) {
-    const sessionsSnapshot = await getDocs(
-      collection(db, "devices", device.id, "sessions")
-    );
-    device.sessions = sessionsSnapshot.docs.map((s) => ({
-      id: s.id,
-      ...s.data(),
-    }));
+// Select the device's most recent session
+async function selectDeviceLatestSession(device) {
+  if (!device.sessions || device.sessions.length === 0) {
+    return;
   }
+
+  // Get the most recent session (first one in the list)
+  const latestSession = device.sessions[0];
+  selectSession(device.id, latestSession.id);
 }
 
+// Toggle sessions dropdown
+function toggleSessions(device) {
+  device.expanded = !device.expanded;
+}
+
+// Select a specific session
 function selectSession(deviceId, sessionId) {
   // If clicking the same session again, deselect it
   if (
@@ -102,11 +148,17 @@ function selectSession(deviceId, sessionId) {
   }
 }
 
+// Check if a specific session is selected
 function isSelected(deviceId, sessionId) {
   return (
     selectedSession.deviceId === deviceId &&
     selectedSession.sessionId === sessionId
   );
+}
+
+// Check if any session from this device is active
+function isDeviceActive(deviceId) {
+  return selectedSession.deviceId === deviceId;
 }
 </script>
 
@@ -152,132 +204,178 @@ function isSelected(deviceId, sessionId) {
   }
 }
 
-.device-list {
-  list-style: none;
-  padding: 0;
+.device-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
 }
 
-.device-item {
-  margin-bottom: 0.5rem;
+.device-card {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
 }
 
-.device-header {
+.device-card:hover {
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.2);
+  transform: translateY(-2px);
+}
+
+.device-card.active {
+  border-color: #48c774;
+  box-shadow: 0 4px 16px rgba(72, 199, 116, 0.3);
+}
+
+.card-main {
+  padding: 1.5rem;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.875rem 1rem;
+  gap: 1rem;
+  position: relative;
+  transition: background 0.2s ease;
+}
+
+.card-main:hover {
+  background: #f8f9fa;
+}
+
+.device-icon {
+  font-size: 2.5rem;
+  flex-shrink: 0;
+}
+
+.device-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.device-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0 0 0.25rem 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-status {
+  font-size: 0.85rem;
+  color: #666;
+  margin: 0;
+}
+
+.latest-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  border-radius: 10px;
-  cursor: pointer;
-  user-select: none;
-  transition: all 0.3s ease;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.card-actions {
+  border-top: 1px solid #e0e0e0;
+  padding: 0.5rem;
+}
+
+.dropdown-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background: transparent;
+  border: none;
+  color: #667eea;
   font-weight: 500;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+  border-radius: 6px;
 }
 
-.device-header:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+.dropdown-btn:not(:disabled):hover {
+  background: #f0f2ff;
 }
 
-.device-header.expanded {
-  border-radius: 10px 10px 0 0;
+.dropdown-btn:disabled {
+  color: #ccc;
+  cursor: not-allowed;
 }
 
-.expand-icon {
-  font-size: 0.75rem;
+.dropdown-btn.expanded {
+  background: #f0f2ff;
+}
+
+.dropdown-icon {
+  font-size: 0.7rem;
   transition: transform 0.3s ease;
-  display: inline-block;
 }
 
-.device-header.expanded .expand-icon {
-  transform: rotate(0deg);
-}
-
-.device-id {
-  font-size: 0.95rem;
-  flex: 1;
-}
-
-.session-list {
-  list-style: none;
-  padding: 0.5rem 0.5rem 0.5rem 1.5rem;
+.session-dropdown {
+  border-top: 1px solid #e0e0e0;
   background: #f8f9fa;
-  border-radius: 0 0 10px 10px;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+  max-height: 200px;
+  overflow-y: auto;
 }
 
-.session-item {
-  margin-bottom: 0.5rem;
-}
-
-.session-content {
+.session-row {
+  padding: 0.875rem 1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
   transition: all 0.2s ease;
+  border-bottom: 1px solid #e0e0e0;
 }
 
-.session-content:hover {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-  transform: translateX(4px);
+.session-row:last-child {
+  border-bottom: none;
 }
 
-.session-id {
-  font-size: 0.9rem;
-  color: #2c3e50;
+.session-row:hover {
+  background: white;
+}
+
+.session-row.selected {
+  background: #e8f5e9;
+  color: #48c774;
+  font-weight: 500;
+}
+
+.session-label {
+  font-size: 0.85rem;
   font-family: "Courier New", monospace;
-  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.select-btn {
-  padding: 0.5rem 1rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
-  transition: all 0.3s ease;
   white-space: nowrap;
-  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
 }
 
-.select-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
-}
-
-.select-btn:active {
-  transform: translateY(0);
-}
-
-.select-btn.active {
-  background: linear-gradient(135deg, #48c774 0%, #3ebd68 100%);
-  box-shadow: 0 2px 4px rgba(72, 199, 116, 0.3);
-}
-
-.select-btn.active:hover {
-  box-shadow: 0 4px 8px rgba(72, 199, 116, 0.4);
+.check-icon {
+  font-size: 1rem;
+  color: #48c774;
+  font-weight: bold;
 }
 
 .loading-sessions {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
-  padding: 0.75rem;
+  padding: 1rem;
   color: #666;
-  font-size: 0.9rem;
-  font-style: italic;
+  font-size: 0.85rem;
 }
 
 .mini-loader {
@@ -287,5 +385,29 @@ function isSelected(deviceId, sessionId) {
   border-top: 2px solid #667eea;
   border-radius: 50%;
   animation: spin 1s linear infinite;
+}
+
+/* Scrollbar styling for session dropdown */
+.session-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.session-dropdown::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.session-dropdown::-webkit-scrollbar-thumb {
+  background: #667eea;
+  border-radius: 3px;
+}
+
+.session-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #764ba2;
+}
+
+@media (max-width: 768px) {
+  .device-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
