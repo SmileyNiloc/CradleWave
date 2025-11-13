@@ -3,10 +3,12 @@
 import devicetree from "./components/devicetree.vue";
 import hrGraph from "./components/hrGraph.vue";
 import { reactive, provide } from "vue";
+import frameGraph from "./components/frameGraph.vue";
 
 const selection = reactive({
   deviceId: null,
   sessionId: null,
+  collectionId: null,
 });
 provide("selectedSession", selection);
 </script>
@@ -21,7 +23,7 @@ provide("selectedSession", selection);
         <p class="app-subtitle">Real-Time Heart Rate Monitoring System</p>
       </div>
     </header>
-
+    <tempGraph />
     <main class="main-content">
       <div class="content-grid">
         <aside class="sidebar">
@@ -30,6 +32,7 @@ provide("selectedSession", selection);
 
         <section class="graph-section">
           <hrGraph />
+          <frameGraph />
           <div v-if="selection.sessionId" class="session-info">
             <div class="info-card">
               <span class="info-label">Device ID:</span>
@@ -38,6 +41,10 @@ provide("selectedSession", selection);
             <div class="info-card">
               <span class="info-label">Session ID:</span>
               <span class="info-value">{{ selection.sessionId }}</span>
+            </div>
+            <div v-if="selection.collectionId" class="info-card">
+              <span class="info-label">Collection:</span>
+              <span class="info-value">{{ selection.collectionId }}</span>
             </div>
           </div>
         </section>

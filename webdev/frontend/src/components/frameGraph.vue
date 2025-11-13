@@ -8,18 +8,18 @@
     <div class="graph-wrapper">
       <v-chart :option="chartOption" autoresize class="chart" />
       <div v-if="heartRateData.collection.length === 0" class="no-data-overlay">
-        <p>No data available in this collection</p>
+        <p>No radar data available in this collection</p>
       </div>
     </div>
   </div>
   <div v-else class="empty-state">
-    <div class="empty-icon">📊</div>
+    <div class="empty-icon">�</div>
     <h3>No Session Selected</h3>
     <p>
       {{
         selectedSession.sessionId && !selectedSession.collectionId
-          ? "Select a collection to view data"
-          : "Select a device and session from the sidebar to view heart rate data"
+          ? "Select a collection to view radar frame data"
+          : "Select a device and session from the sidebar to view radar frame data"
       }}
     </p>
   </div>
@@ -77,10 +77,9 @@ watch(
       newVal.deviceId,
       "sessions",
       newVal.sessionId,
-      "heart_rate_data"
-      // newVal.collectionId
+      newVal.collectionId
     );
-    const q = query(readingsRef, orderBy("time"));
+    const q = query(readingsRef, orderBy("frame_count"));
     heartRateData.collection = useCollection(q);
   },
   { deep: true, immediate: true }
@@ -103,7 +102,7 @@ watch(
 // Computed ECharts option
 const chartOption = computed(() => ({
   title: {
-    text: "Real-Time Heart Rate Monitor",
+    text: "Real-Time Radar Frame Monitor",
     left: "center",
     textStyle: {
       color: "#333",
@@ -113,9 +112,9 @@ const chartOption = computed(() => ({
   },
   tooltip: {
     trigger: "axis",
-    backgroundColor: "rgba(50, 50, 50, 0.9)",
-    borderColor: "#e74c3c",
-    borderWidth: 1,
+    backgroundColor: "rgba(30, 30, 50, 0.95)",
+    borderColor: "#3498db",
+    borderWidth: 2,
     textStyle: {
       color: "#fff",
     },
@@ -125,7 +124,7 @@ const chartOption = computed(() => ({
       return `
         <div style="padding: 5px;">
           <strong>Frame:</strong> ${point.axisValue}<br/>
-          <strong style="color: #e74c3c;">Heart Rate:</strong> ${point.value} BPM
+          <strong style="color: #3498db;">Signal Strength:</strong> ${point.value} dB
         </div>
       `;
     },
@@ -139,91 +138,104 @@ const chartOption = computed(() => ({
   },
   xAxis: {
     type: "category",
-    data: heartRateData.collection.map((d) => d.time),
+    data: heartRateData.collection.map((d, index) => `Frame ${index + 1}`),
     boundaryGap: false,
     axisLine: {
       lineStyle: {
-        color: "#666",
+        color: "#3498db",
+        width: 2,
       },
     },
     axisLabel: {
-      color: "#666",
+      color: "#555",
       fontSize: 11,
       rotate: 45,
     },
     splitLine: {
       show: true,
       lineStyle: {
-        color: "#e0e0e0",
-        type: "dashed",
+        color: "#e8f4f8",
+        type: "solid",
       },
     },
   },
   yAxis: {
     type: "value",
-    name: "BPM",
+    name: "Signal (dB)",
     nameTextStyle: {
-      color: "#666",
+      color: "#555",
       fontSize: 12,
       padding: [0, 0, 0, 10],
+      fontWeight: "bold",
     },
     scale: true,
     axisLine: {
       lineStyle: {
-        color: "#666",
+        color: "#3498db",
+        width: 2,
       },
     },
     axisLabel: {
-      color: "#666",
+      color: "#555",
       fontSize: 11,
     },
     splitLine: {
       lineStyle: {
-        color: "#e0e0e0",
-        type: "dashed",
+        color: "#e8f4f8",
+        type: "solid",
       },
     },
   },
   series: [
     {
-      name: "Heart Rate",
+      name: "Radar Frame",
       type: "line",
-      smooth: true,
-      data: heartRateData.collection.map((d) => d.heart_rate),
-      showSymbol: false,
-      symbolSize: 6,
+      smooth: false,
+      data: heartRateData.collection.map((d) => d.frame_db),
+      showSymbol: true,
+      symbolSize: 4,
       symbol: "circle",
       sampling: "lttb",
       lineStyle: {
-        color: "#e74c3c",
-        width: 3,
-        shadowColor: "rgba(231, 76, 60, 0.4)",
-        shadowBlur: 10,
+        color: "#3498db",
+        width: 2,
+        shadowColor: "rgba(52, 152, 219, 0.5)",
+        shadowBlur: 8,
+      },
+      itemStyle: {
+        color: "#3498db",
+        borderColor: "#2980b9",
+        borderWidth: 2,
       },
       areaStyle: {
         color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
           {
             offset: 0,
-            color: "rgba(231, 76, 60, 0.3)",
+            color: "rgba(52, 152, 219, 0.4)",
           },
           {
             offset: 1,
-            color: "rgba(231, 76, 60, 0.05)",
+            color: "rgba(52, 152, 219, 0.05)",
           },
         ]),
       },
       emphasis: {
         focus: "series",
         lineStyle: {
-          width: 4,
+          width: 3,
+        },
+        itemStyle: {
+          borderWidth: 3,
+          shadowBlur: 10,
+          shadowColor: "rgba(52, 152, 219, 0.8)",
         },
       },
       animation: true,
-      animationDuration: 300,
+      animationDuration: 200,
       animationEasing: "linear",
     },
   ],
-  animationDuration: 300,
+  animationDuration: 200,
   animationEasing: "linear",
 }));
 </script>

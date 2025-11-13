@@ -349,6 +349,7 @@ async def main():
             {
                 "metadata": {
                     "frame_rate": args.frate,
+                    "start_time": time.time(),
                 }
             }
         )
@@ -463,7 +464,15 @@ async def main():
                     print(f"*** Heart Rate Estimate: {hr_bpm:.1f} BPM ***")
                     print(f"{'='*60}\n")
                     last_hr_time = time.time()
-                    # await client.send_data({"time": last_hr_time, "heart_rate": hr_bpm})
+                    await client.send_data(
+                        {
+                            "heart_rate_data": {
+                                "time": last_hr_time,
+                                "heart_rate": hr_bpm,
+                                "frame_count": frame_counter,
+                            }
+                        }
+                    )
                 # Timing management
                 frame_time = time.time() - frame_start
                 expected_time = 1.0 / args.frate

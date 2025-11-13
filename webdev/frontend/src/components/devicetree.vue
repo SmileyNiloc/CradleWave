@@ -52,14 +52,44 @@
           <div
             v-for="session in device.sessions || []"
             :key="session.id"
-            class="session-row"
-            :class="{ selected: isSelected(device.id, session.id) }"
-            @click="selectSession(device.id, session.id)"
+            class="session-item-wrapper"
           >
-            <span class="session-label">{{ session.id }}</span>
-            <span v-if="isSelected(device.id, session.id)" class="check-icon"
-              >✓</span
-            >
+            <div class="session-row-container">
+              <div
+                class="session-row"
+                :class="{ selected: isSessionSelected(device.id, session.id) }"
+                @click="toggleCollections(device, session)"
+              >
+                <span class="dropdown-icon-small">{{
+                  session.expanded ? "▼" : "▶"
+                }}</span>
+                <span class="session-label">{{ session.id }}</span>
+              </div>
+            </div>
+
+            <div v-if="session.expanded" class="collection-dropdown">
+              <div
+                v-for="col in session.collections || []"
+                :key="col"
+                class="collection-row"
+                :class="{
+                  selected: isCollectionSelected(device.id, session.id, col),
+                }"
+                @click="selectCollection(device.id, session.id, col)"
+              >
+                <span class="collection-label">{{ col }}</span>
+                <span
+                  v-if="isCollectionSelected(device.id, session.id, col)"
+                  class="check-icon"
+                  >✓</span
+                >
+              </div>
+
+              <div v-if="session.collections === null" class="loading-sessions">
+                <div class="mini-loader"></div>
+                Loading collections...
+              </div>
+            </div>
           </div>
 
           <div v-if="!device.sessions" class="loading-sessions">
@@ -105,6 +135,8 @@ async function loadDeviceSessions(device) {
   device.sessions = sessionsSnapshot.docs
     .map((s) => ({
       id: s.id,
+      expanded: false,
+      collections: null,
       ...s.data(),
     }))
     .sort((a, b) => {
@@ -112,6 +144,40 @@ async function loadDeviceSessions(device) {
       // Session IDs are in format: session_YYYYMMDD_HHMMSS_xxxxx
       return b.id.localeCompare(a.id);
     });
+}
+
+// Load collections for a specific session
+async function loadSessionCollections(device, session) {
+  // Firestore doesn't provide a way to list subcollections directly
+  // We need to check known collection names
+  const knownCollections = [
+    "heart_rate_data",
+    "raw_data",
+    "frame_data",
+    "metadata",
+  ];
+  const availableCollections = [];
+
+  for (const colName of knownCollections) {
+    try {
+      const colRef = collection(
+        db,
+        "devices",
+        device.id,
+        "sessions",
+        session.id,
+        colName
+      );
+      const colSnapshot = await getDocs(colRef);
+      if (!colSnapshot.empty) {
+        availableCollections.push(colName);
+      }
+    } catch (error) {
+      console.log(`Collection ${colName} not found or error:`, error);
+    }
+  }
+
+  session.collections = availableCollections;
 }
 
 loadDevices();
@@ -124,7 +190,16 @@ async function selectDeviceLatestSession(device) {
 
   // Get the most recent session (first one in the list)
   const latestSession = device.sessions[0];
-  selectSession(device.id, latestSession.id);
+
+  // Load collections if not already loaded
+  if (latestSession.collections === null) {
+    await loadSessionCollections(device, latestSession);
+  }
+
+  // Select the first collection if available
+  if (latestSession.collections && latestSession.collections.length > 0) {
+    selectCollection(device.id, latestSession.id, latestSession.collections[0]);
+  }
 }
 
 // Toggle sessions dropdown
@@ -132,27 +207,49 @@ function toggleSessions(device) {
   device.expanded = !device.expanded;
 }
 
-// Select a specific session
-function selectSession(deviceId, sessionId) {
-  // If clicking the same session again, deselect it
-  if (
-    selectedSession.deviceId === deviceId &&
-    selectedSession.sessionId === sessionId
-  ) {
-    selectedSession.deviceId = null;
-    selectedSession.sessionId = null;
-  } else {
-    // Otherwise, select the new session
-    selectedSession.deviceId = deviceId;
-    selectedSession.sessionId = sessionId;
+// Toggle collections dropdown for a session
+async function toggleCollections(device, session) {
+  session.expanded = !session.expanded;
+
+  // Load collections if not already loaded
+  if (session.expanded && session.collections === null) {
+    await loadSessionCollections(device, session);
   }
 }
 
-// Check if a specific session is selected
-function isSelected(deviceId, sessionId) {
+// Select a specific collection
+function selectCollection(deviceId, sessionId, collectionId) {
+  // If clicking the same collection again, deselect it
+  if (
+    selectedSession.deviceId === deviceId &&
+    selectedSession.sessionId === sessionId &&
+    selectedSession.collectionId === collectionId
+  ) {
+    selectedSession.deviceId = null;
+    selectedSession.sessionId = null;
+    selectedSession.collectionId = null;
+  } else {
+    // Otherwise, select the new collection
+    selectedSession.deviceId = deviceId;
+    selectedSession.sessionId = sessionId;
+    selectedSession.collectionId = collectionId;
+  }
+}
+
+// Check if a specific session is selected (any collection)
+function isSessionSelected(deviceId, sessionId) {
   return (
     selectedSession.deviceId === deviceId &&
     selectedSession.sessionId === sessionId
+  );
+}
+
+// Check if a specific collection is selected
+function isCollectionSelected(deviceId, sessionId, collectionId) {
+  return (
+    selectedSession.deviceId === deviceId &&
+    selectedSession.sessionId === sessionId &&
+    selectedSession.collectionId === collectionId
   );
 }
 
@@ -326,37 +423,88 @@ function isDeviceActive(deviceId) {
 .session-dropdown {
   border-top: 1px solid #e0e0e0;
   background: #f8f9fa;
-  max-height: 200px;
+  max-height: 300px;
   overflow-y: auto;
+}
+
+.session-item-wrapper {
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.session-item-wrapper:last-child {
+  border-bottom: none;
+}
+
+.session-row-container {
+  background: #f8f9fa;
 }
 
 .session-row {
   padding: 0.875rem 1rem;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 0.5rem;
   cursor: pointer;
   transition: all 0.2s ease;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.session-row:last-child {
-  border-bottom: none;
 }
 
 .session-row:hover {
-  background: white;
+  background: #e9ecef;
 }
 
 .session-row.selected {
   background: #e8f5e9;
-  color: #48c774;
   font-weight: 500;
+}
+
+.dropdown-icon-small {
+  font-size: 0.7rem;
+  color: #667eea;
+  flex-shrink: 0;
 }
 
 .session-label {
   font-size: 0.85rem;
   font-family: "Courier New", monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.collection-dropdown {
+  background: white;
+  border-left: 3px solid #667eea;
+  margin-left: 1.5rem;
+}
+
+.collection-row {
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.collection-row:last-child {
+  border-bottom: none;
+}
+
+.collection-row:hover {
+  background: #f8f9fa;
+}
+
+.collection-row.selected {
+  background: #e8f5e9;
+  color: #48c774;
+  font-weight: 500;
+}
+
+.collection-label {
+  font-size: 0.8rem;
+  color: #2c3e50;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

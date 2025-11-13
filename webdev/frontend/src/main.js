@@ -16,6 +16,14 @@ window.console.error = (...args) => {
   resizeObserverErr(...args);
 };
 
+// Also suppress in window error handler
+window.addEventListener("error", (e) => {
+  if (e.message && e.message.includes("ResizeObserver")) {
+    e.stopImmediatePropagation();
+    return false;
+  }
+});
+
 const app = createApp(App);
 
 // Setup VueFire
