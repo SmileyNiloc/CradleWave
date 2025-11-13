@@ -247,23 +247,20 @@ async def websocket_endpoint(websocket: WebSocket):
                     merge=True,
                 )
                 print(f"Created session doc for {device_id}/{session_id}")
-
             for key, value in data.items():
-                subcollection_ref = session_ref.collection(key)
-                subcollection_ref.add(value)
-                # print(f"Added {key} data for {device_id}/{session_id} at {timestamp}")
-                session_ref.collection(f"${data}").add(
-                    {"time": data.get("time"), "heart_rate": data.get("heart_rate")}
-                )
+                if key == "metadata":
+                    # Store metadata at session level
+                    session_ref.set({key: value}, merge=True)
+                    print(f"Set metadata for {device_id}/{session_id} at {timestamp}")
+                    continue
+                else:
+                    subcollection_ref = session_ref.collection(key)
+                    subcollection_ref.add(value)
+                    print(
+                        f"Added {key} data for {device_id}/{session_id} at {timestamp}"
+                    )
 
-            # # Append to array field
-            # session_ref.update({
-            #     "heart_rate_data": firestore.ArrayUnion([
-            #         {"time": data.get("time"),
-            #          "heart_rate": data.get("heart_rate")}])
-            # })
-
-            print(f"Added HR data for {device_id}/{session_id} at {timestamp}")
+            # print(f"Added HR data for {device_id}/{session_id} at {timestamp}")
     except Exception as e:
         print(f"Client disconnected: {e}")
         clients.remove(websocket)

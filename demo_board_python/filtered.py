@@ -348,7 +348,7 @@ async def main():
         await client.send_data(
             {
                 "metadata": {
-                    "frame_rate": args.def_frate,
+                    "frame_rate": args.frate,
                 }
             }
         )
@@ -383,7 +383,7 @@ async def main():
                 {
                     "frame_data": {
                         "frame_db": frame_peak_dB * (-1),
-                        "frame_count": frame_counter,
+                        "frame_count": frame_number,
                     }
                 }
             )
