@@ -1,6 +1,8 @@
-from fastapi import FastAPI, Request, WebSocket # pyright: ignore[reportMissingImports]
-from fastapi.middleware.cors import CORSMiddleware # pyright: ignore[reportMissingImports] # Import the middleware
-from dotenv import load_dotenv # pyright: ignore[reportMissingImports]
+from fastapi import FastAPI, Request, WebSocket  # pyright: ignore[reportMissingImports]
+from fastapi.middleware.cors import (
+    CORSMiddleware,
+)  # pyright: ignore[reportMissingImports] # Import the middleware
+from dotenv import load_dotenv  # pyright: ignore[reportMissingImports]
 import os
 import json
 import msgpack
@@ -10,7 +12,7 @@ from google.cloud import firestore  # pyright: ignore[reportMissingImports]
 
 app = FastAPI()
 
-#List of origins that are allowed to make requests
+# List of origins that are allowed to make requests
 origins = [
     # "http://localhost:5047",
     "*"
@@ -26,7 +28,7 @@ app.add_middleware(
 
 load_dotenv()  # Load environment variables from .env file
 
-ENV = os.getenv("ENVIRONMENT","production")
+ENV = os.getenv("ENVIRONMENT", "production")
 print(ENV)
 
 if ENV == "developement":
@@ -36,12 +38,14 @@ else:
     db = firestore.Client()
 clients = set()
 
+
 @app.post("/test/add")
 async def add_data(data: dict):
-    doc_ref = db.collection('test_collection').document()
+    doc_ref = db.collection("test_collection").document()
     print(data)
     doc_ref.set(data)
     return {"message": "Data added successfully", "id": doc_ref.id}
+
 
 @app.websocket("/test/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -53,21 +57,26 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             # Receive message from client
             data = {}
-            data['text'] = await websocket.receive_text()
+            data["text"] = await websocket.receive_text()
             print(f"Received: {data['text']}")
             try:
-                data['json'] = json.loads(data['text'])
+                data["json"] = json.loads(data["text"])
 
-                if(data['json'].get('collection',None)):
-                    collection_name = data['json']['collection']
-                    doc_name = data['json'].get('document',None)
-                    doc_ref = db.collection(collection_name).document(doc_name) if doc_name else db.collection(collection_name).document()
-                    doc_ref.set(data['json'].get('data',{}))
-                    print(f"Data added to collection {collection_name} with ID {doc_ref.id}")
+                if data["json"].get("collection", None):
+                    collection_name = data["json"]["collection"]
+                    doc_name = data["json"].get("document", None)
+                    doc_ref = (
+                        db.collection(collection_name).document(doc_name)
+                        if doc_name
+                        else db.collection(collection_name).document()
+                    )
+                    doc_ref.set(data["json"].get("data", {}))
+                    print(
+                        f"Data added to collection {collection_name} with ID {doc_ref.id}"
+                    )
             except Exception as e:
                 print(f"Error processing data: {e}")
                 continue
-
 
     except Exception as e:
         print(f"Client disconnected: {e}")
@@ -78,15 +87,19 @@ async def websocket_endpoint(websocket: WebSocket):
 def hello():
     return {"message": "Hello, World!"}
 
+
 @app.get("/")
 def root():
     return {"message": "Welcome to the CradleWave API"}
 
+
 @app.post("/api/test")
 async def test_endpoint(request: Request):
     req = await request.json()
-    response = {"message": "This is a test POST endpoint (but using GET)!",
-                "request": req}
+    response = {
+        "message": "This is a test POST endpoint (but using GET)!",
+        "request": req,
+    }
     return response
 
 
@@ -110,6 +123,7 @@ async def websocket_endpoint(websocket: WebSocket):
         print(f"Client disconnected: {e}")
         clients.remove(websocket)
 
+
 @app.websocket("/ws/filtered")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -122,10 +136,9 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_bytes()
             print(f"Received: {data}")
 
-            #unpack the binary data
+            # unpack the binary data
             unpacked_data = msgpack.unpackb(data)
             print(f"Unpacked Data: {unpacked_data}")
-
 
             # Connect to filtered_data collection
             collection_name = "filtered_data"
@@ -136,6 +149,7 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"Client disconnected: {e}")
         clients.remove(websocket)
+
 
 @app.websocket("/ws/heart_rate")
 async def websocket_endpoint(websocket: WebSocket):
@@ -149,7 +163,7 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_bytes()
             print(f"Received: {data}")
 
-            #unpack the binary data
+            # unpack the binary data
             unpacked_data = msgpack.unpackb(data)
             print(f"Unpacked Data: {unpacked_data}")
 
@@ -162,34 +176,94 @@ async def websocket_endpoint(websocket: WebSocket):
             # devices/{device_id}/sessions/{session_id}/heart_rate
             session_ref = (
                 db.collection("devices")
-                  .document(device_id)
-                  .collection("sessions")
-                  .document(session_id)
-            ) 
+                .document(device_id)
+                .collection("sessions")
+                .document(session_id)
+            )
             # Ensure session document exists
             if not session_ref.get().exists:
-                session_ref.set({
-                "session_id": session_id,
-                "user_id": device_id,
-                }, merge=True)
+                session_ref.set(
+                    {
+                        "session_id": session_id,
+                        "user_id": device_id,
+                    },
+                    merge=True,
+                )
                 print(f"Created session doc for {device_id}/{session_id}")
 
-
-            session_ref.collection("heart_rate_data").add({
-                "time": data.get("time"),
-                "heart_rate": data.get("heart_rate")
-            })
+            session_ref.collection("heart_rate_data").add(
+                {"time": data.get("time"), "heart_rate": data.get("heart_rate")}
+            )
 
             # # Append to array field
             # session_ref.update({
             #     "heart_rate_data": firestore.ArrayUnion([
-            #         {"time": data.get("time"), 
+            #         {"time": data.get("time"),
             #          "heart_rate": data.get("heart_rate")}])
             # })
 
             print(f"Added HR data for {device_id}/{session_id} at {timestamp}")
+    except Exception as e:
+        print(f"Client disconnected: {e}")
+        clients.remove(websocket)
 
 
+@app.websocket("/ws/data_handler")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    clients.add(websocket)
+    print("Client connected")
+
+    try:
+        while True:
+            # Receive message from client
+            data = await websocket.receive_bytes()
+            print(f"Received: {data}")
+
+            # unpack the binary data
+            unpacked_data = msgpack.unpackb(data)
+            print(f"Unpacked Data: {unpacked_data}")
+
+            device_id = unpacked_data.get("device", "unknown_user")
+            session_id = unpacked_data.get("session_id", "unknown_session")
+            timestamp = unpacked_data.get("timestamp", time.time())
+            data = unpacked_data.get("data", {})
+
+            # Build Firestore path:
+            # devices/{device_id}/sessions/{session_id}/heart_rate
+            session_ref = (
+                db.collection("devices")
+                .document(device_id)
+                .collection("sessions")
+                .document(session_id)
+            )
+            # Ensure session document exists
+            if not session_ref.get().exists:
+                session_ref.set(
+                    {
+                        "session_id": session_id,
+                        "user_id": device_id,
+                    },
+                    merge=True,
+                )
+                print(f"Created session doc for {device_id}/{session_id}")
+
+            for key, value in data.items():
+                subcollection_ref = session_ref.collection(key)
+                subcollection_ref.add(value)
+                # print(f"Added {key} data for {device_id}/{session_id} at {timestamp}")
+                session_ref.collection(f"${data}").add(
+                    {"time": data.get("time"), "heart_rate": data.get("heart_rate")}
+                )
+
+            # # Append to array field
+            # session_ref.update({
+            #     "heart_rate_data": firestore.ArrayUnion([
+            #         {"time": data.get("time"),
+            #          "heart_rate": data.get("heart_rate")}])
+            # })
+
+            print(f"Added HR data for {device_id}/{session_id} at {timestamp}")
     except Exception as e:
         print(f"Client disconnected: {e}")
         clients.remove(websocket)
