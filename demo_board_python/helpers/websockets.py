@@ -27,6 +27,9 @@ class WebSocketClient:
         >>> await client.connect()
         >>> await client.send_data({'heart_rate': 72})
         >>> await client.wait_until_done()
+    Note:
+        - USE asyncio.sleep or something else with asyncio to make sure that the background process of sending data actually happens
+        - Designed for use with asyncio event loop
     """
 
     def __init__(self, url):
