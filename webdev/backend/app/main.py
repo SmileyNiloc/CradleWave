@@ -208,9 +208,6 @@ async def websocket_endpoint(websocket: WebSocket):
         clients.remove(websocket)
 
 
-session_cache = {}
-
-
 @app.websocket("/ws/data_handler")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
@@ -219,62 +216,77 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         while True:
-            # Receive binary
-            raw = await websocket.receive_bytes()
-            unpacked_data = msgpack.unpackb(raw)
+            # Receive message from client
+            data = await websocket.receive_bytes()
+            print(f"Received: {data}")
+
+            # unpack the binary data
+            unpacked_data = msgpack.unpackb(data)
+            print(f"Unpacked Data: {unpacked_data}")
 
             device_id = unpacked_data.get("device", "unknown_user")
             session_id = unpacked_data.get("session_id", "unknown_session")
             timestamp = unpacked_data.get("timestamp", time.time())
             data = unpacked_data.get("data", {})
 
+            # Build Firestore path:
+            # devices/{device_id}/sessions/{session_id}/
             session_ref = (
                 db.collection("devices")
                 .document(device_id)
                 .collection("sessions")
                 .document(session_id)
             )
-
-            # Ensure session exists
-            snapshot = await run_in_threadpool(session_ref.get)
-            if not snapshot.exists:
-                await run_in_threadpool(
-                    session_ref.set,
-                    {"session_id": session_id, "user_id": device_id},
+            # Ensure session document exists
+            if not session_ref.get().exists:
+                session_ref.set(
+                    {
+                        "session_id": session_id,
+                        "user_id": device_id,
+                    },
                     merge=True,
                 )
+                print(f"Created session doc for {device_id}/{session_id}")
 
-            # Read cached metadata
-            meta = session_cache.get((device_id, session_id), {})
-            frame_rate = meta.get("frame_rate", 15)
+            # Get start time from metadata to calculate relative time
+            # Metadata is found at db.devices.{device_id}.sessions.{session_id}.metadata.start_time
+            snapshot = session_ref.get(["metadata.frame_rate"])
+            # start_time = int(snapshot.get("metadata.start_time"))
+            frame_rate = snapshot.get("metadata.frame_rate")  # default to 15 fps
 
-            # Process incoming keys
             for key, value in data.items():
-
-                # --- METADATA ---
                 if key == "metadata":
-                    session_cache[(device_id, session_id)] = value
-                    await run_in_threadpool(session_ref.set, {key: value}, True)
+                    # Store metadata at session level
+                    session_ref.set({key: value}, merge=True)
+                    print(f"Set metadata for {device_id}/{session_id} at {timestamp}")
                     continue
-
-                # --- FRAME / HR DATA ---
-                if key in ("frame_data", "heart_rate_data"):
-                    frame_count = value.get("frame_count")
-                    if frame_count is None:
-                        print("Missing frame_count")
-                        continue
-
+                if key == "heart_rate_data" or key == "frame_data":
+                    subcollection_ref = session_ref.collection(key)
+                    # value[relative_time] = start_time + (value[frame_count])
                     entry = dict(value)
-                    entry["relative_time"] = frame_count / frame_rate
+                    entry["relative_time"] = None
+                    frame_count = entry.get("frame_count", None)
+                    if frame_count is None:
+                        print(
+                            f"Missing frame_count in {key} data for {device_id}/{session_id} at {timestamp}"
+                        )
+                        continue
+                    entry["relative_time"] = value["frame_count"] / frame_rate
+                    subcollection_ref.add(entry)
 
-                    sub = session_ref.collection(key)
-                    await run_in_threadpool(sub.add, entry)
-                    continue
+                    print(
+                        f"Added {key} data for {device_id}/{session_id} at {timestamp}"
+                    )
 
-                # --- OTHER FIELDS ---
-                sub = session_ref.collection(key)
-                await run_in_threadpool(sub.add, value)
+                else:
+                    subcollection_ref = session_ref.collection(key)
+                    subcollection_ref.add(value)
 
+                    print(
+                        f"Added {key} data for {device_id}/{session_id} at {timestamp}"
+                    )
+
+            # print(f"Added HR data for {device_id}/{session_id} at {timestamp}")
     except Exception as e:
         print(f"Client disconnected: {e}")
-        clients.discard(websocket)
+        clients.remove(websocket)
