@@ -42,10 +42,10 @@ provide("selectedSession", selection);
               <span class="info-label">Session ID:</span>
               <span class="info-value">{{ selection.sessionId }}</span>
             </div>
-            <div v-if="selection.collectionId" class="info-card">
+            <!-- <div v-if="selection.collectionId" class="info-card">
               <span class="info-label">Collection:</span>
               <span class="info-value">{{ selection.collectionId }}</span>
-            </div>
+            </div> -->
           </div>
         </section>
       </div>

@@ -1,10 +1,5 @@
 <template>
-  <div
-    v-if="
-      selectedSession.sessionId != null && selectedSession.collectionId != null
-    "
-    class="graph-container"
-  >
+  <div v-if="selectedSession.sessionId != null" class="graph-container">
     <div class="graph-wrapper">
       <v-chart :option="chartOption" autoresize class="chart" />
       <div v-if="heartRateData.collection.length === 0" class="no-data-overlay">
@@ -13,15 +8,9 @@
     </div>
   </div>
   <div v-else class="empty-state">
-    <div class="empty-icon">�</div>
+    <div class="empty-icon">📡</div>
     <h3>No Session Selected</h3>
-    <p>
-      {{
-        selectedSession.sessionId && !selectedSession.collectionId
-          ? "Select a collection to view radar frame data"
-          : "Select a device and session from the sidebar to view radar frame data"
-      }}
-    </p>
+    <p>Select a device and session from the sidebar to view radar frame data</p>
   </div>
 </template>
 
@@ -63,13 +52,13 @@ watch(
   () => selectedSession,
   (newVal) => {
     console.log("Selected session changed:", newVal);
-    if (!newVal || !newVal.sessionId || !newVal.collectionId) {
+    if (!newVal || !newVal.sessionId) {
       console.log("Missing required fields for data fetch");
       return;
     }
 
     console.log(
-      `Fetching data from: devices/${newVal.deviceId}/sessions/${newVal.sessionId}/${newVal.collectionId}`
+      `Fetching data from: devices/${newVal.deviceId}/sessions/${newVal.sessionId}/frame_data`
     );
     const readingsRef = collection(
       db,
@@ -77,7 +66,7 @@ watch(
       newVal.deviceId,
       "sessions",
       newVal.sessionId,
-      newVal.collectionId
+      "frame_data"
     );
     const q = query(readingsRef, orderBy("frame_count"));
     heartRateData.collection = useCollection(q);
