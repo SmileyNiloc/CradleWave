@@ -366,6 +366,14 @@ async def main():
 
             frame_contents = device.get_next_frame()
             frame_data = frame_contents[0]
+            await client.send_data(
+                {
+                    "raw_frame": {
+                        "frame_count": frame_number,
+                        "frame_data": frame_data.tolist(),
+                    }
+                }
+            )
             # print(f"frame contents {frame_data} \n")
 
             all_frame_dB_values = []
