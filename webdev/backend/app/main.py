@@ -230,7 +230,7 @@ async def websocket_endpoint(websocket: WebSocket):
             data = unpacked_data.get("data", {})
 
             # Build Firestore path:
-            # devices/{device_id}/sessions/{session_id}/heart_rate
+            # devices/{device_id}/sessions/{session_id}/
             session_ref = (
                 db.collection("devices")
                 .document(device_id)
@@ -247,15 +247,39 @@ async def websocket_endpoint(websocket: WebSocket):
                     merge=True,
                 )
                 print(f"Created session doc for {device_id}/{session_id}")
+
+            # Get start time from metadata to calculate relative time
+            # Metadata is found at db.devices.{device_id}.sessions.{session_id}.metadata.start_time
+            snapshot = session_ref.get(["metadata.frame_rate"])
+            # start_time = int(snapshot.get("metadata.start_time"))
+            frame_rate = snapshot.get("metadata.frame_rate")  # default to 15 fps
+
             for key, value in data.items():
                 if key == "metadata":
                     # Store metadata at session level
                     session_ref.set({key: value}, merge=True)
                     print(f"Set metadata for {device_id}/{session_id} at {timestamp}")
                     continue
+                if key == "heart_rate_data" or key == "frame_data":
+                    subcollection_ref = session_ref.collection(key)
+                    # value[relative_time] = start_time + (value[frame_count])
+                    frame_count = value.get("frame_count", None)
+                    if frame_count is None:
+                        print(
+                            f"Missing frame_count in {key} data for {device_id}/{session_id} at {timestamp}"
+                        )
+                        continue
+                    value["relative_time"] = value["frame_count"] / frame_rate
+                    subcollection_ref.add(value)
+
+                    print(
+                        f"Added {key} data for {device_id}/{session_id} at {timestamp}"
+                    )
+
                 else:
                     subcollection_ref = session_ref.collection(key)
                     subcollection_ref.add(value)
+
                     print(
                         f"Added {key} data for {device_id}/{session_id} at {timestamp}"
                     )
