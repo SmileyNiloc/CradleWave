@@ -370,7 +370,7 @@ async def main():
                 {
                     "raw_frame": {
                         "frame_count": frame_number,
-                        "frame_data": frame_data.tolist(),
+                        "frame_data": frame_data,
                     }
                 }
             )

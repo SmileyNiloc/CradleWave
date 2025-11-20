@@ -9,6 +9,7 @@ import msgpack
 import time, datetime
 
 from google.cloud import firestore  # pyright: ignore[reportMissingImports]
+from cachetools import TTLCache  # For caching metadata
 
 app = FastAPI()
 
@@ -250,10 +251,11 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # Get start time from metadata to calculate relative time
             # Metadata is found at db.devices.{device_id}.sessions.{session_id}.metadata.start_time
-            snapshot = session_ref.get(["metadata.frame_rate"])
-            # start_time = int(snapshot.get("metadata.start_time"))
-            frame_rate = snapshot.get("metadata.frame_rate")  # default to 15 fps
+            # snapshot = session_ref.get()
+            # session_data = snapshot.to_dict() or {}
 
+            # metadata = session_data.get("metadata", {})
+            # frame_rate = metadata.get("frame_rate", 15)
             for key, value in data.items():
                 if key == "metadata":
                     # Store metadata at session level
@@ -271,6 +273,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             f"Missing frame_count in {key} data for {device_id}/{session_id} at {timestamp}"
                         )
                         continue
+                    frame_rate = get_frame_rate_cached(session_ref, session_id)
                     entry["relative_time"] = value["frame_count"] / frame_rate
                     subcollection_ref.add(entry)
 
@@ -290,3 +293,24 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"Client disconnected: {e}")
         clients.remove(websocket)
+
+
+# Cache: session_id -> (frame_rate, timestamp)
+frame_rate_cache = {}
+
+# Cache metadata for each session_id for 3 seconds
+metadata_cache = TTLCache(maxsize=500, ttl=3)
+
+
+def get_frame_rate(session_ref, session_id):
+    """Get frame_rate from cache or Firestore."""
+    if session_id in metadata_cache:
+        return metadata_cache[session_id].get("frame_rate", 15)
+
+    # Fetch "metadata.frame_rate" field only
+    snapshot = session_ref.get(["metadata.frame_rate"])
+    frame_rate = snapshot.get("metadata.frame_rate") or 15
+
+    # Store metadata dict in cache
+    metadata_cache[session_id] = {"frame_rate": frame_rate}
+    return frame_rate

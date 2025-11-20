@@ -3,3 +3,4 @@ uvicorn[standard]
 google-cloud-firestore
 dotenv
 msgpack
+cachetools
