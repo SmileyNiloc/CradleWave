@@ -17,7 +17,7 @@ from helpers.DopplerAlgo import *
 
 
 # Definitions for websocket client
-from helpers.websockets import WebSocketClient
+from helpers.sock import WebSocketClient
 import asyncio
 
 # WebSocket URL (use wss:// for secure WebSocket, not https://)
@@ -366,14 +366,15 @@ async def main():
 
             frame_contents = device.get_next_frame()
             frame_data = frame_contents[0]
-            await client.send_data(
-                {
-                    "raw_frame": {
-                        "frame_count": frame_number,
-                        "frame_data": frame_data,
-                    }
-                }
-            )
+            #
+            # await client.send_data(
+            #     {
+            #         "raw_frame": {
+            #             "frame_count": frame_number,
+            #             "frame_data": frame_data,
+            #         }
+            #     }
+            # )
             # print(f"frame contents {frame_data} \n")
 
             all_frame_dB_values = []
