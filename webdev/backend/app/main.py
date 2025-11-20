@@ -273,7 +273,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             f"Missing frame_count in {key} data for {device_id}/{session_id} at {timestamp}"
                         )
                         continue
-                    frame_rate = get_frame_rate_cached(session_ref, session_id)
+                    frame_rate = get_frame_rate(session_ref, session_id)
                     entry["relative_time"] = value["frame_count"] / frame_rate
                     subcollection_ref.add(entry)
 
