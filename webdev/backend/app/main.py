@@ -274,7 +274,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         )
                         continue
                     frame_rate = get_frame_rate(session_ref, session_id)
-                    entry["relative_time"] = value["frame_count"] / frame_rate
+                    entry["relative_time"] = round(value["frame_count"] / frame_rate, 2)
                     subcollection_ref.add(entry)
 
                     print(
