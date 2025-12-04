@@ -1,21 +1,26 @@
 <template>
   <div v-if="selectedSession.sessionId != null" class="graph-container">
     <div class="graph-wrapper">
-      <v-chart ref="chartRef" :option="chartOption" autoresize class="chart" />
-      <div v-if="heartRateData.collection.length === 0" class="no-data-overlay">
-        <p>No radar data available in this collection</p>
+      <v-chart :option="chartOption" autoresize class="chart" />
+      <div
+        v-if="breathingRateData.collection.length === 0"
+        class="no-data-overlay"
+      >
+        <p>No data available in this collection</p>
       </div>
     </div>
   </div>
   <div v-else class="empty-state">
-    <div class="empty-icon">📡</div>
+    <div class="empty-icon">🫁</div>
     <h3>No Session Selected</h3>
-    <p>Select a device and session from the sidebar to view radar frame data</p>
+    <p>
+      Select a device and session from the sidebar to view breathing rate data
+    </p>
   </div>
 </template>
 
 <script setup>
-import { computed, inject, watch, reactive, nextTick, ref } from "vue";
+import { computed, inject, watch, reactive } from "vue";
 import { useCollection } from "vuefire";
 import { collection, query, orderBy } from "firebase/firestore";
 import { db } from "../utils/firebase.js";
@@ -27,7 +32,6 @@ import {
   TooltipComponent,
   TitleComponent,
   LegendComponent,
-  DataZoomComponent,
 } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 
@@ -39,15 +43,12 @@ echarts.use([
   TitleComponent,
   LegendComponent,
   CanvasRenderer,
-  DataZoomComponent,
 ]);
-
-const chartRef = ref(null);
 
 // Register component locally
 const selectedSession = inject("selectedSession");
 
-let heartRateData = reactive({
+let breathingRateData = reactive({
   collection: useCollection(),
 });
 
@@ -62,7 +63,7 @@ watch(
     }
 
     console.log(
-      `Fetching data from: devices/${newVal.deviceId}/sessions/${newVal.sessionId}/frame_data`
+      `Fetching data from: devices/${newVal.deviceId}/sessions/${newVal.sessionId}/breathing_rate_data`
     );
     const readingsRef = collection(
       db,
@@ -70,41 +71,18 @@ watch(
       newVal.deviceId,
       "sessions",
       newVal.sessionId,
-      "frame_data"
+      "breathing_rate_data"
     );
-    const q = query(readingsRef, orderBy("frame_count"));
-    heartRateData.collection = useCollection(q);
+    const q = query(readingsRef, orderBy("time"));
+    breathingRateData.collection = useCollection(q);
   },
   { deep: true, immediate: true }
 );
-nextTick(() => {
-  const total = heartRateData.collection.length;
-
-  chartRef.value.chart.dispatchAction({
-    type: "dataZoom",
-    startValue: Math.max(total - 150, 0),
-    endValue: total - 1,
-  });
-});
-
-// // Limit to 250 most recent
-// watch(
-//   () => heartRateData.collection,
-//   (newVal) => {
-//     console.log(`Received ${newVal.length} data points from Firestore`);
-//     if (newVal.length > 0) {
-//       console.log("Sample data point:", newVal[0]);
-//     }
-//     if (newVal.length > 250) {
-//       heartRateData.collection.splice(0, newVal.length - 250);
-//     }
-//   }
-// );
 
 // Computed ECharts option
 const chartOption = computed(() => ({
   title: {
-    text: "Real-Time Radar Frame Monitor",
+    text: "Real-Time Breathing Rate Monitor",
     left: "center",
     textStyle: {
       color: "#333",
@@ -114,9 +92,9 @@ const chartOption = computed(() => ({
   },
   tooltip: {
     trigger: "axis",
-    backgroundColor: "rgba(30, 30, 50, 0.95)",
+    backgroundColor: "rgba(50, 50, 50, 0.9)",
     borderColor: "#3498db",
-    borderWidth: 2,
+    borderWidth: 1,
     textStyle: {
       color: "#fff",
     },
@@ -125,8 +103,8 @@ const chartOption = computed(() => ({
       const point = params[0];
       return `
         <div style="padding: 5px;">
-          <strong>Time(s):</strong> ${point.axisValue}<br/>
-          <strong style="color: #3498db;">Signal Strength:</strong> ${point.value} dB
+          <strong>Time:</strong> ${point.axisValue}s<br/>
+          <strong style="color: #3498db;">Breathing Rate:</strong> ${point.value} BPM
         </div>
       `;
     },
@@ -140,41 +118,97 @@ const chartOption = computed(() => ({
   },
   xAxis: {
     type: "category",
-    data: heartRateData.collection.map((d) =>
+    data: breathingRateData.collection.map((d) =>
       Number(d.relative_time).toFixed(2)
     ),
     boundaryGap: false,
+    min: (v) => v.max - 10,
+    max: "dataMax",
+    axisLine: {
+      lineStyle: {
+        color: "#666",
+      },
+    },
     axisLabel: {
+      color: "#666",
+      fontSize: 11,
       rotate: 45,
-      color: "#555",
-      fontSize: 10,
     },
     splitLine: {
       show: true,
-      lineStyle: { color: "#eee" },
+      lineStyle: {
+        color: "#e0e0e0",
+        type: "dashed",
+      },
     },
   },
   yAxis: {
     type: "value",
-    name: "Signal (dB)",
+    name: "Breaths/min",
+    nameTextStyle: {
+      color: "#666",
+      fontSize: 12,
+      padding: [0, 0, 0, 10],
+    },
     scale: true,
+    axisLine: {
+      lineStyle: {
+        color: "#666",
+      },
+    },
+    axisLabel: {
+      color: "#666",
+      fontSize: 11,
+    },
+    splitLine: {
+      lineStyle: {
+        color: "#e0e0e0",
+        type: "dashed",
+      },
+    },
   },
   series: [
     {
-      name: "Radar Frame",
+      name: "Breathing Rate",
       type: "line",
-      smooth: false,
-      data: heartRateData.collection.map((d) => d.frame_db),
-      showSymbol: true,
+      smooth: true,
+      data: breathingRateData.collection.map((d) => d.breathing_rate),
+      showSymbol: false,
+      symbolSize: 6,
+      symbol: "circle",
       sampling: "lttb",
+      lineStyle: {
+        color: "#3498db",
+        width: 3,
+        shadowColor: "rgba(52, 152, 219, 0.4)",
+        shadowBlur: 10,
+      },
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          {
+            offset: 0,
+            color: "rgba(52, 152, 219, 0.3)",
+          },
+          {
+            offset: 1,
+            color: "rgba(52, 152, 219, 0.05)",
+          },
+        ]),
+      },
+      emphasis: {
+        focus: "series",
+        lineStyle: {
+          width: 4,
+        },
+      },
+      animation: true,
+      animationDuration: 300,
+      animationEasing: "linear",
     },
   ],
-
   dataZoom: [
     {
       type: "slider",
-      start: Math.max(heartRateData.collection.length - 10, 0), // show last 30% by default
-      end: heartRateData.collection.length - 1, // can scroll through everything
       bottom: 0,
       height: 20,
     },
@@ -182,6 +216,8 @@ const chartOption = computed(() => ({
       type: "inside",
     },
   ],
+  animationDuration: 300,
+  animationEasing: "linear",
 }));
 </script>
 

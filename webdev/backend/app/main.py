@@ -262,7 +262,11 @@ async def websocket_endpoint(websocket: WebSocket):
                     session_ref.set({key: value}, merge=True)
                     print(f"Set metadata for {device_id}/{session_id} at {timestamp}")
                     continue
-                if key == "heart_rate_data" or key == "frame_data":
+                if (
+                    key == "heart_rate_data"
+                    or key == "frame_data"
+                    or key == "breathing_rate_data"
+                ):
                     subcollection_ref = session_ref.collection(key)
                     # value[relative_time] = start_time + (value[frame_count])
                     entry = dict(value)

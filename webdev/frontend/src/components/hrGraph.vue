@@ -75,18 +75,18 @@ watch(
 );
 
 // Limit to 250 most recent
-watch(
-  () => heartRateData.collection,
-  (newVal) => {
-    console.log(`Received ${newVal.length} data points from Firestore`);
-    if (newVal.length > 0) {
-      console.log("Sample data point:", newVal[0]);
-    }
-    if (newVal.length > 250) {
-      heartRateData.collection.splice(0, newVal.length - 250);
-    }
-  }
-);
+// watch(
+//   () => heartRateData.collection,
+//   (newVal) => {
+//     console.log(`Received ${newVal.length} data points from Firestore`);
+//     if (newVal.length > 0) {
+//       console.log("Sample data point:", newVal[0]);
+//     }
+//     if (newVal.length > 250) {
+//       heartRateData.collection.splice(0, newVal.length - 250);
+//     }
+//   }
+// );
 
 // Computed ECharts option
 const chartOption = computed(() => ({
@@ -127,8 +127,12 @@ const chartOption = computed(() => ({
   },
   xAxis: {
     type: "category",
-    data: heartRateData.collection.map((d) => d.time),
+    data: heartRateData.collection.map((d) =>
+      Number(d.relative_time).toFixed(2)
+    ),
     boundaryGap: false,
+    min: (v) => v.max - 10,
+    max: "dataMax",
     axisLine: {
       lineStyle: {
         color: "#666",
@@ -211,6 +215,16 @@ const chartOption = computed(() => ({
       animationEasing: "linear",
     },
   ],
+  dataZoom: [
+    {
+      type: "slider",
+      bottom: 0,
+      height: 20,
+    },
+    {
+      type: "inside",
+    },
+  ],
   animationDuration: 300,
   animationEasing: "linear",
 }));
@@ -229,6 +243,7 @@ const chartOption = computed(() => ({
   height: 500px;
   transition: all 0.3s ease;
   position: relative;
+  overflow: hidden;
 }
 
 .graph-wrapper:hover {

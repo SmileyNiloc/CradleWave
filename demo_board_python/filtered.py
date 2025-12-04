@@ -482,6 +482,15 @@ async def main():
                             }
                         }
                     )
+                    # For adding Breathing Rate, send in format:
+                    # await client.send_data(
+                    #     {
+                    #         "breathing_rate_data": {
+                    #             "time": last_br_time,      Not sure if this is how you do time, but send something
+                    #             "breathing_rate": WHATEVER THE VALUE IS,
+                    #             "frame_count": frame_counter,
+                    #         }
+                    #     }
                 # Timing management
                 frame_time = time.time() - frame_start
                 expected_time = 1.0 / args.frate

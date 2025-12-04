@@ -2,6 +2,7 @@
 // import ApiTest from "./components/api-test.vue";
 import devicetree from "./components/devicetree.vue";
 import hrGraph from "./components/hrGraph.vue";
+import breathingGraph from "./components/breathingGraph.vue";
 import { reactive, provide } from "vue";
 import frameGraph from "./components/frameGraph.vue";
 
@@ -32,6 +33,7 @@ provide("selectedSession", selection);
 
         <section class="graph-section">
           <hrGraph />
+          <breathingGraph />
           <frameGraph />
           <div v-if="selection.sessionId" class="session-info">
             <div class="info-card">
