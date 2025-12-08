@@ -112,8 +112,10 @@ const chartOption = computed(() => ({
       const point = params[0];
       return `
         <div style="padding: 5px;">
-          <strong>Frame:</strong> ${point.axisValue}<br/>
-          <strong style="color: #e74c3c;">Heart Rate:</strong> ${point.value} BPM
+          <strong>Time:</strong> ${point.axisValue}<br/>
+          <strong style="color: #e74c3c;">Heart Rate:</strong> ${Number(
+            point.value
+          ).toFixed(2)} BPM
         </div>
       `;
     },
