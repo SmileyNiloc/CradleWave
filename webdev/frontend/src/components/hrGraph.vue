@@ -115,7 +115,7 @@ const chartOption = computed(() => ({
           <strong>Time:</strong> ${point.axisValue}<br/>
           <strong style="color: #e74c3c;">Heart Rate:</strong> ${Number(
             point.value
-          ).toFixed(2)} BPM
+          ).toFixed(0)} BPM
         </div>
       `;
     },
