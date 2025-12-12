@@ -107,112 +107,6 @@ CradleWave/
 - ECharts
 - Firebase SDK
 
-## Installation
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/SmileyNiloc/CradleWave.git
-cd CradleWave
-```
-
-### 2. Set Up Radar Data Acquisition (Raspberry Pi)
-
-```bash
-cd demo_board_python
-
-# Create virtual environment
-python3 -m venv demo_board
-source demo_board/bin/activate
-
-# Install Infineon SDK (choose appropriate wheel for your platform)
-pip install python_wheels/ifxradarsdk-3.6.4+4b4a6245-py3-none-linux_armv7l.whl  # For Raspberry Pi
-# OR
-pip install python_wheels/ifxradarsdk-3.6.4+4b4a6245-py3-none-linux_x86_64.whl  # For x86_64 Linux
-
-# Install other dependencies
-pip install -r requirements.txt
-```
-
-### 3. Set Up Backend Server
-
-```bash
-cd webdev/backend
-
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment variables
-cp .env.example .env
-# Edit .env with your Firebase credentials
-```
-
-### 4. Set Up Frontend Dashboard
-
-```bash
-cd webdev/frontend
-
-# Install dependencies
-npm install
-
-# Configure Firebase
-# Edit src/utils/firebase.js with your Firebase config
-```
-
-## Usage
-
-### Running the Radar Data Acquisition
-
-```bash
-cd demo_board_python
-source demo_board/bin/activate
-
-# With real-time visualization
-python3 filtered.py
-
-# Headless mode (for deployment)
-python3 filtered_no_plot.py
-
-# Command-line options
-python3 filtered.py --frate 15 --nframes 150 --collect 10.0
-```
-
-**Options:**
-
-- `--frate` - Frame rate in Hz (default: 15)
-- `--nframes` - Number of frames to process (default: 150)
-- `--collect` - Initial data collection time in seconds (default: 10.0)
-
-### Running the Backend Server
-
-```bash
-cd webdev/backend
-source venv/bin/activate
-
-# Development
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Production (via Docker)
-docker build -t cradlewave-backend .
-docker run -p 8000:8000 cradlewave-backend
-```
-
-### Running the Frontend Dashboard
-
-```bash
-cd webdev/frontend
-
-# Development
-npm run serve
-
-# Production build
-npm run build
-```
-
 ## Signal Processing Pipeline
 
 The system implements a multi-stage signal processing pipeline:
@@ -235,14 +129,6 @@ Raw Radar Data → MTI Filter → Sliding Average → Bandpass Filter → FFT �
 | `/ws/data_handler` | Primary data ingestion from radar devices |
 | `/ws/heart_rate`   | Legacy heart rate data endpoint           |
 | `/ws/filtered`     | Filtered signal data endpoint             |
-
-### REST Endpoints
-
-| Method | Endpoint     | Description                |
-| ------ | ------------ | -------------------------- |
-| GET    | `/`          | Health check               |
-| GET    | `/api/hello` | Test endpoint              |
-| POST   | `/test/add`  | Add test data to Firestore |
 
 ## Data Format
 
@@ -272,28 +158,6 @@ Data is transmitted via WebSocket using msgpack serialization:
 }
 ```
 
-## Deployment
-
-### Google Cloud Deployment
-
-The backend is configured for deployment on Google Cloud Run:
-
-```bash
-# Build and deploy using Cloud Build
-gcloud builds submit --config cloudbuild.yaml
-
-# Or deploy directly
-gcloud run deploy cradlewave --source webdev/backend
-```
-
-### Firebase Hosting (Frontend)
-
-```bash
-cd webdev/frontend
-npm run build
-firebase deploy --only hosting
-```
-
 ## Team
 
 **University of Delaware - CPEG 498 Senior Design Project (2025-2026)**
@@ -304,12 +168,11 @@ firebase deploy --only hosting
 
 ## Acknowledgments
 
-- Infineon Technologies for the BGT60TR13C radar development kit
 - University of Delaware ECE Department
 
 ## License
 
-This project is developed as part of the University of Delaware Senior Design program.
+This project is developed as part of the University of Delaware Electrical and Computer Engineering Senior Design program.
 
 ## References
 
