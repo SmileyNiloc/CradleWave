@@ -130,23 +130,24 @@ class SignalProcessor:
             dominant_freq = valid_freqs[peak_idx]
             bpm = dominant_freq * 60
 
-            # Confidence check: ensure the peak is significant
-            mean_power = np.mean(valid_fft)
-            peak_power = valid_fft[peak_idx]
+        # Confidence check: ensure the peak is significant
+        mean_power = np.mean(valid_fft)
+        peak_power = valid_fft[peak_idx]
 
-            if peak_power < 2 * mean_power:
-                return 0
+        if peak_power < 2 * mean_power:
+            return 0
 
-            return bpm
+        return bpm
 
+        """
         # Remove DC and normalize
         # signal_data = signal_data - np.mean(signal_data)
         std = np.std(signal_data)
         if std > 0:
             signal_data /= std
-
-        nperseg = max(128, len(signal_data) // 4)
-        nfft = max(512, len(signal_data) * 2)
+        
+        nperseg = max(128, len(signal_data)//4)
+        nfft = max(512, len(signal_data)*2)
         window = windows.hann(nperseg)
         noverlap = int(0.5 * nperseg)
 
@@ -157,32 +158,33 @@ class SignalProcessor:
             window=window,
             nperseg=nperseg,
             noverlap=noverlap,
-            nfft=nfft,
+            nfft=nfft
         )
-
+        
         # Focus on heart rate band (0.8–2.5 Hz)
         mask = (freqs >= 0.8) & (freqs <= 2.5)
         freqs_band = freqs[mask]
         pxx_band = pxx[mask]
-
+        
         if len(freqs_band) == 0:
             return 0, 0
-
+        
         # Find dominant frequency
         peak_idx = np.argmax(pxx_band)
         dominant_freq = freqs_band[peak_idx]
         bpm = dominant_freq * 60
-
+        
         # Confidence metric (power ratio)
         mean_power = np.mean(pxx_band)
         peak_power = pxx_band[peak_idx]
-        confidence = peak_power / (mean_power + 1e-10)
-
+        confidence = (peak_power / (mean_power + 1e-10))
+        
         # Apply simple threshold to reject weak signals
         if confidence < 2.0:
             bpm = 0
-
+        
         return bpm
+        """
 
     def estimate_breathing_rate_fft(self, data):
         if len(data) < 60:
@@ -551,6 +553,7 @@ async def main():
                         f"Signal Quality: STD={signal_std:.3f}, Range={signal_range:.3f}"
                     )
                     last_time = time.time()
+                    await client.wait_until_done()
 
             except KeyboardInterrupt:
                 print("\nStopped by user.")
