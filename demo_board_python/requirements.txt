@@ -11,6 +11,6 @@ scipy>=1.11.0
 # Visualization
 matplotlib>=3.7.0
 
-# Optional: for better performance
+# For network communication and data serialization
 msgpack>=1.0.0
 websockets>=10.0
