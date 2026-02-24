@@ -36,3 +36,6 @@ def hello():
 @app.get("/")
 def root():
     return {"message": "Welcome to the CradleWave API"}
+
+
+# CHANGE SO THAT WORKFLOW GENERATES THE REQUIRENMENTS>TXT FILE
