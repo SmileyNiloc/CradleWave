@@ -1,9 +1,6 @@
 # Use an official Python runtime as a parent image
 FROM python:3.12-slim
 
-# Copy the dependencies file to the working directory
-COPY requirements.txt requirements.txt
-
 # Set the working directory in the container
 WORKDIR /app
 
@@ -11,6 +8,9 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
+
+# Copy the dependencies file to the working directory
+COPY requirements.txt .
 # ENV CACHEBUST 1
 
 # Install any needed packages specified in requirements.txt
