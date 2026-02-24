@@ -1,0 +1,19 @@
+name: Push Backend server to EC2
+
+on:
+  push:
+    branches:
+      - main
+env:
+  REGISTRY: ghrc.io
+  IMAGE_NAME: ${{ github.repository}}
+
+jobs:
+  build_push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
