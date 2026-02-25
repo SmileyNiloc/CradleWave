@@ -89,15 +89,3 @@ jobs:
             -e PORT=8080 \
             ghcr.io/smileyniloc/cradlewave-backend:main"
           ssh cradlewave-ec2 "docker image prune -f"
-
-      # - name: Run remote commands on EC2 instance
-      #   uses: appleboy/ssh-action@master
-      #   with:
-      #     host: ${{ secrets.EC2_HOST }}
-      #     username: ${{ secrets.EC2_USER }}
-      #     key: ${{ secrets.EC2_SSH_KEY }}
-      #     script: |
-      #       docker pull ghcr.io/smileyniloc/cradlewave-backend:latest
-      #       docker stop cradlewave-backend || true
-      #       docker rm cradlewave-backend || true
-      #       docker run -d --name cradlewave-backend -p 80:80 ghcr.io/smileyniloc/cradlewave-backend:latest
