@@ -77,9 +77,18 @@ jobs:
               StrictHostKeyChecking no
           EOF
 
-      - name: Create Remote Log and Download
+      - name: Create Remote Log and update docker container on EC2 instance
         run: |
           ssh cradlewave-ec2 "echo 'Deployment Log - $(date)' > deploy.log"
+          ssh cradlewave-ec2 "docker pull ghcr.io/smileyniloc/cradlewave-backend:main"
+          ssh cradlewave-ec2 "docker stop cradlewave-backend || true && docker rm cradlewave-backend || true"          
+          ssh cradlewave-ec2 "docker run -d \
+            --name cradlewave-backend \
+            --restart unless-stopped \
+            -p 8080:8080 \
+            -e PORT=8080 \
+            ghcr.io/smileyniloc/cradlewave-backend:main"
+          ssh cradlewave-ec2 "docker image prune -f"
 
       # - name: Run remote commands on EC2 instance
       #   uses: appleboy/ssh-action@master
