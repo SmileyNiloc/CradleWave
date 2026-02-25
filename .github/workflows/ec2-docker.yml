@@ -80,8 +80,6 @@ jobs:
       - name: Create Remote Log and Download
         run: |
           ssh cradlewave-ec2 "echo 'Deployment Log - $(date)' > deploy.log"
-          ssh cradlewave-ec2 "uptime >> deploy.log"
-          ssh cradlewave-ec2 "df -h >> deploy.log"
 
       # - name: Run remote commands on EC2 instance
       #   uses: appleboy/ssh-action@master
