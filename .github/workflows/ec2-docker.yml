@@ -88,22 +88,6 @@ jobs:
               ProxyCommand aws ec2-instance-connect open-tunnel --instance-id %h --region us-east-2
               StrictHostKeyChecking no
           EOF
-
-      - name: Create Remote Log and update docker container on EC2 instance
-        run: |
-          ssh cradlewave-ec2 "echo 'Deployment Log - $(date)' >> deploy.log"
-          ssh cradlewave-ec2 "sudo sed -i 's/nameserver .*/nameserver 2001:67c:2b0::4\nnameserver 2001:67c:2b0::6/' /etc/resolv.conf"
-          ssh cradlewave-ec2 << 'EOF'
-                      docker pull ghcr.io/smileyniloc/cradlewave-backend:main
-                      docker stop cradlewave-backend || true
-                      docker rm cradlewave-backend || true
-                      docker run -d \
-                        --name cradlewave-backend \
-                        --restart unless-stopped \
-                        -p 8080:8080 \
-                        ghcr.io/smileyniloc/cradlewave-backend:main
-                      docker image prune -f
-                    EOF
       - name: Deploy Backend to EC2
         run: |
           ssh cradlewave-ec2 << 'EOF'
