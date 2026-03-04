@@ -113,6 +113,21 @@ botocore = "*"
 click = "*"
 
 [[package]]
+name = "awsiotsdk"
+version = "1.28.1"
+description = "AWS IoT SDK based on the AWS Common Runtime"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "awsiotsdk-1.28.1-py3-none-any.whl", hash = "sha256:619394453c1f5c0e8d2e7589eb82e3cac9ce6bc9925db5cfd6e8f1b2281355cc"},
+    {file = "awsiotsdk-1.28.1.tar.gz", hash = "sha256:3f798df76c85753df7b664b2a62b11bb777a9a7ddaa8843dfadb4ac95c0cfc89"},
+]
+
+[package.dependencies]
+awscrt = "0.31.2"
+
+[[package]]
 name = "boto3"
 version = "1.42.60"
 description = "The AWS SDK for Python"
@@ -530,4 +545,4 @@ standard = ["colorama (>=0.4) ; sys_platform == \"win32\"", "httptools (>=0.6.3)
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12"
-content-hash = "077485fb0e50df058b8dd5c7e7db76537ba8d563dca85424af447208930ddc30"
+content-hash = "ad7d9d65d7ac9f08e54c26b9e5cf1bd7acbe3e4809c0510609fc071326b7b26c"
