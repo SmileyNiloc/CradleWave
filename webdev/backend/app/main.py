@@ -11,6 +11,9 @@ import time, datetime
 from google.cloud import firestore  # pyright: ignore[reportMissingImports]
 from cachetools import TTLCache  # For caching metadata
 
+from awsiot import mqtt_connection_builder
+import time
+
 app = FastAPI()
 
 # List of origins that are allowed to make requests
@@ -39,3 +42,20 @@ def root():
 
 
 # CHANGE SO THAT WORKFLOW GENERATES THE REQUIRENMENTS>TXT FILE
+
+
+# No .pem files needed!
+connection = mqtt_connection_builder.websockets_with_default_aws_signing(
+    endpoint="a1py3mdrrjrz1-ats.iot.us-east-2.amazonaws.com",
+    region="us-east-2",
+    client_id="EC2_Backend_Client",
+)
+
+print("Connecting...")
+connection.connect().result()
+print("Connected!")
+
+connection.publish(topic="sdk/test/ec2", payload='{"msg": "Success from EC2!"}', qos=1)
+print("Published!")
+
+connection.disconnect().result()
