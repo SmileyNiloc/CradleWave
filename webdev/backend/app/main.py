@@ -5,7 +5,7 @@ from awscrt import mqtt, auth
 from fastapi.middleware.cors import (
     CORSMiddleware,
 )  # pyright: ignore[reportMissingImports] # Import the middleware
-
+import json
 
 # List of origins that are allowed to make requests
 origins = [
@@ -13,11 +13,21 @@ origins = [
     "*"
 ]
 
-# Global variable to hold our persistent connection
+# Global variables
+# hold persistent connection
 mqtt_conn = None
+# Hold last value (testing)
+last_message = None
 
 # This is what talks to the IAM Role on your EC2
 credentials_provider = auth.AwsCredentialsProvider.new_default_chain()
+
+
+# Callback function for when a message is received (for testing)
+def on_message_received(topic, payload, **kwargs):
+    global last_message
+    print(f"Received message on topic {topic}: {payload}")
+    last_message = json.loads(payload)
 
 
 @asynccontextmanager
@@ -34,6 +44,16 @@ async def lifespan(app: FastAPI):
     print("Connecting to IoT Core...")
     mqtt_conn.connect().result()
     print("Connected!")
+
+    subscribe_topic = "sdk/test/"
+
+    subscribe_future, packet_id = mqtt_conn.subscribe(
+        topic=subscribe_topic,
+        qos=mqtt.QoS.AT_LEAST_ONCE,
+        callback=on_message_received,
+    )
+    subscribe_result = subscribe_future.result()
+    print(f"Subscribed to {subscribe_topic} with {subscribe_result['qos']} QoS")
 
     yield  # The app runs here
 

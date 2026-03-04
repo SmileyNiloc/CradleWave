@@ -106,7 +106,7 @@ jobs:
             docker run -d \
               --name cradlewave-backend \
               --restart unless-stopped \
-              -p 8080:8080 \
+              --network host \
               ghcr.io/smileyniloc/cradlewave-backend:main
 
             # 4. Clean up dangling images to save disk space
