@@ -1,15 +1,18 @@
 # Use an official Python runtime as a parent image
 FROM python:3.12-slim
 
+RUN pip install poetry
+
+
+# Copy only the dependency files first (for caching)
+COPY pyproject.toml poetry.lock ./
+
+# Install dependencies without creating a virtualenv inside the container
+RUN poetry config virtualenvs.create false \
+    && poetry install --no-interaction --no-ansi --no-root
+
 # Set the working directory in the container
 WORKDIR /app
-
-# Copy the dependencies file to the working directory
-COPY requirements.txt .
-# ENV CACHEBUST 1
-
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application code to the working directory
 COPY . .
