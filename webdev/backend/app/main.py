@@ -1,10 +1,11 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from awsiot import mqtt_connection_builder
-from awscrt import mqtt
+from awscrt import mqtt, auth
 from fastapi.middleware.cors import (
     CORSMiddleware,
 )  # pyright: ignore[reportMissingImports] # Import the middleware
+
 
 # List of origins that are allowed to make requests
 origins = [
@@ -15,6 +16,9 @@ origins = [
 # Global variable to hold our persistent connection
 mqtt_conn = None
 
+# This is what talks to the IAM Role on your EC2
+credentials_provider = auth.AwsCredentialsProvider.new_default_chain()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,6 +28,7 @@ async def lifespan(app: FastAPI):
         endpoint="a1py3mdrrjrz1-ats.iot.us-east-2.amazonaws.com",
         region="us-east-2",
         client_id="EC2_Backend_Client",
+        credentials_provider=credentials_provider,
     )
 
     print("Connecting to IoT Core...")

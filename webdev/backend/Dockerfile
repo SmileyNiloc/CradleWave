@@ -1,8 +1,7 @@
 # Use an official Python runtime as a parent image
 FROM python:3.12-slim
 
-RUN pip install poetry
-
+RUN pip install -no-cache-dir poetry
 
 # Copy only the dependency files first (for caching)
 COPY pyproject.toml poetry.lock ./

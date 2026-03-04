@@ -57,6 +57,9 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # These two lines for caching/magic speed?:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
   run-remote-commands:
     needs: build_push
     runs-on: ubuntu-latest
@@ -90,12 +93,14 @@ jobs:
         run: |
           ssh cradlewave-ec2 "echo 'Deployment Log - $(date)' >> deploy.log"
           ssh cradlewave-ec2 "sudo sed -i 's/nameserver .*/nameserver 2001:67c:2b0::4\nnameserver 2001:67c:2b0::6/' /etc/resolv.conf"
-          ssh cradlewave-ec2 "docker pull ghcr.io/smileyniloc/cradlewave-backend:main"
-          ssh cradlewave-ec2 "docker stop cradlewave-backend || true && docker rm cradlewave-backend || true"          
-          ssh cradlewave-ec2 "docker run -d \
-            --name cradlewave-backend \
-            --restart unless-stopped \
-            -p 8080:8080 \
-            -e PORT=8080 \
-            ghcr.io/smileyniloc/cradlewave-backend:main"
-          ssh cradlewave-ec2 "docker image prune -f"
+          ssh cradlewave-ec2 << 'EOF'
+                      docker pull ghcr.io/smileyniloc/cradlewave-backend:main
+                      docker stop cradlewave-backend || true
+                      docker rm cradlewave-backend || true
+                      docker run -d \
+                        --name cradlewave-backend \
+                        --restart unless-stopped \
+                        -p 8080:8080 \
+                        ghcr.io/smileyniloc/cradlewave-backend:main
+                      docker image prune -f
+                    EOF
