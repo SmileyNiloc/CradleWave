@@ -104,3 +104,27 @@ jobs:
                         ghcr.io/smileyniloc/cradlewave-backend:main
                       docker image prune -f
                     EOF
+      - name: Deploy Backend to EC2
+        run: |
+          ssh cradlewave-ec2 << 'EOF'
+            set -e  # Exit immediately if a command fails
+            
+            # 1. Update logs and fix DNS (if still necessary)
+            echo "Deployment Log - $(date)" >> deploy.log
+            sudo sed -i 's/nameserver .*/nameserver 2001:67c:2b0::4\nnameserver 2001:67c:2b0::6/' /etc/resolv.conf
+
+            # 2. Pull and Swap Container
+            docker pull ghcr.io/smileyniloc/cradlewave-backend:main
+            
+            docker stop cradlewave-backend || true
+            docker rm cradlewave-backend || true
+            
+            docker run -d \
+              --name cradlewave-backend \
+              --restart unless-stopped \
+              -p 8080:8080 \
+              ghcr.io/smileyniloc/cradlewave-backend:main
+
+            # 4. Clean up dangling images to save disk space
+            docker image prune -f
+          EOF
