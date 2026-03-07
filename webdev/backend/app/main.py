@@ -34,29 +34,6 @@ def on_message_received(topic, payload, **kwargs):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- Startup: Connect to IoT Core ---
-    global mqtt_conn
-    mqtt_conn = mqtt_connection_builder.websockets_with_default_aws_signing(
-        endpoint="a1py3mdrrjrz1-ats.iot.us-east-2.amazonaws.com",
-        region="us-east-2",
-        client_id="EC2_Backend_Client",
-        credentials_provider=credentials_provider,
-    )
-
-    print("Connecting to IoT Core...")
-    mqtt_conn.connect().result()
-    print("Connected!")
-
-    subscribe_topic = "sdk/test/"
-
-    subscribe_future, packet_id = mqtt_conn.subscribe(
-        topic=subscribe_topic,
-        qos=mqtt.QoS.AT_LEAST_ONCE,
-        callback=on_message_received,
-    )
-    subscribe_result = subscribe_future.result()
-    print(f"Subscribed to {subscribe_topic} with {subscribe_result['qos']} QoS")
-
     # connect to Redis
     global redis_conn
     redis_conn = redis.Redis(host="redis", port=6379, decode_responses=True)
@@ -64,8 +41,8 @@ async def lifespan(app: FastAPI):
     yield  # The app runs here
 
     # --- Shutdown: Clean up ---
-    print("Disconnecting...")
-    mqtt_conn.disconnect().result()
+    if redis_conn:
+        redis_conn.close()
 
 
 app = FastAPI(lifespan=lifespan)
