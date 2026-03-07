@@ -12,7 +12,8 @@ dependencies = [
     "awscrt (>=0.31.2,<0.32.0)",
     "uvicorn (>=0.41.0,<0.42.0)",
     "awsiotsdk (>=1.28.1,<2.0.0)",
-    "google-cloud-firestore (>=2.24.0,<3.0.0)"
+    "google-cloud-firestore (>=2.24.0,<3.0.0)",
+    "redis (>=7.3.0,<8.0.0)"
 ]
 
 

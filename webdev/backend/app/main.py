@@ -5,7 +5,7 @@ from awscrt import mqtt, auth  # type: ignore
 from fastapi.middleware.cors import (  # pyright: ignore[reportMissingImports]
     CORSMiddleware,
 )  # Import the middleware
-import json
+import json, redis
 
 # List of origins that are allowed to make requests
 origins = [
@@ -18,6 +18,8 @@ origins = [
 mqtt_conn = None
 # Hold last value (testing)
 last_message = None
+# Hold Redis connection
+redis_conn = None
 
 # This is what talks to the IAM Role on your EC2
 credentials_provider = auth.AwsCredentialsProvider.new_default_chain()
@@ -54,6 +56,10 @@ async def lifespan(app: FastAPI):
     )
     subscribe_result = subscribe_future.result()
     print(f"Subscribed to {subscribe_topic} with {subscribe_result['qos']} QoS")
+
+    # connect to Redis
+    global redis_conn
+    redis_conn = redis.Redis(host="redis", port=6379, decode_responses=True)
 
     yield  # The app runs here
 
@@ -101,6 +107,18 @@ def hello():
 @app.get("/")
 def root():
     return {"message": "Welcome to the CradleWave API"}
+
+
+@app.get("/api/redis-info")
+def redis_info():
+    global redis_conn
+    if redis_conn is None:
+        return {"error": "Redis connection not established."}
+    try:
+        info = redis_conn.info()
+        return {"redis_info": info}
+    except Exception as e:
+        return {"error": f"Failed to get Redis info: {str(e)}"}
 
 
 # CHANGE SO THAT WORKFLOW GENERATES THE REQUIRENMENTS>TXT FILE

@@ -98,27 +98,13 @@ jobs:
           ssh cradlewave-ec2 "mkdir -p ~/webdev/backend"
 
           # Copy the file using the correct local path
-          scp webdev/backend/docker-compose.yml cradlewave-ec2:~/webdev/backend/docker-compose.yml
+          scp webdev/backend/docker-compose.yml cradlewave-ec2:~/docker-compose.yml
 
           ssh cradlewave-ec2 << 'EOF'
-            set -e  # Exit immediately if a command fails
-            
-            # 1. Update logs and fix DNS (if still necessary)
-            echo "Deployment Log - $(date)" >> deploy.log
-            sudo sed -i 's/nameserver .*/nameserver 2001:67c:2b0::4\nnameserver 2001:67c:2b0::6/' /etc/resolv.conf
-
-            # 2. Pull and Swap Container
-            docker pull ghcr.io/smileyniloc/cradlewave-backend:main
-            
-            docker stop cradlewave-backend || true
-            docker rm cradlewave-backend || true
-            
-            docker run -d \
-              --name cradlewave-backend \
-              --restart unless-stopped \
-              --network host \
-              ghcr.io/smileyniloc/cradlewave-backend:main
-
-            # 4. Clean up dangling images to save disk space
+            set -e
+            cd ~/webdev/backend
+          #Uses the docker-compose file to pull the new image and restart the containers
+            docker compose pull
+            docker compose up -d
             docker image prune -f
           EOF
