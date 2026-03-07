@@ -90,7 +90,12 @@ jobs:
           EOF
       - name: Deploy Backend to EC2
         run: |
-          scp docker-compose.yml cradlewave-ec2:~/docker-compose.yml
+          # Create the directory on the EC2 instance first
+          ssh cradlewave-ec2 "mkdir -p ~/webdev/backend"
+          
+          # Copy the file using the correct local path
+          scp webdev/backend/docker-compose.yml cradlewave-ec2:~/webdev/backend/docker-compose.yml
+          
           ssh cradlewave-ec2 << 'EOF'
             set -e  # Exit immediately if a command fails
             
