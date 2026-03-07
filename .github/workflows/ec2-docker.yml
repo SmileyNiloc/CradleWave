@@ -90,6 +90,7 @@ jobs:
           EOF
       - name: Deploy Backend to EC2
         run: |
+          scp docker-compose.yml cradlewave-ec2:~/docker-compose.yml
           ssh cradlewave-ec2 << 'EOF'
             set -e  # Exit immediately if a command fails
             

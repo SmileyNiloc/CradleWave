@@ -1,10 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI  # type: ignore
 from contextlib import asynccontextmanager
-from awsiot import mqtt_connection_builder
-from awscrt import mqtt, auth
-from fastapi.middleware.cors import (
+from awsiot import mqtt_connection_builder  # type: ignore
+from awscrt import mqtt, auth  # type: ignore
+from fastapi.middleware.cors import (  # pyright: ignore[reportMissingImports]
     CORSMiddleware,
-)  # pyright: ignore[reportMissingImports] # Import the middleware
+)  # Import the middleware
 import json
 
 # List of origins that are allowed to make requests
