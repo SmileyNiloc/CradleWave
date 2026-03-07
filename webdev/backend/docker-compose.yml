@@ -3,7 +3,8 @@ services:
     image: redis:alpine
     container_name: redis
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - "6379:6379"
     command:
       [
         "/usr/local/bin/redis-server",
@@ -20,6 +21,7 @@ services:
     image: ghcr.io/smileyniloc/cradlewave-backend:main
     container_name: cradlewave-backend
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - "8080:8080"
     depends_on:
       - redis
