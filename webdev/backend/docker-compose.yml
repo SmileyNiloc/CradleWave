@@ -4,15 +4,22 @@ services:
     container_name: redis
     restart: unless-stopped
     network_mode: host
+    command:
+      [
+        "/usr/local/bin/redis-server",
+        "--maxmemory",
+        "150mb",
+        "--maxmemory-policy",
+        "allkeys-lru",
+      ]
+    deploy:
+      resources:
+        limits:
+          memory: 5256M
   cradlewave-backend:
     image: ghcr.io/smileyniloc/cradlewave-backend:main
     container_name: cradlewave-backend
     restart: unless-stopped
     network_mode: host
-    deploy:
-      resources:
-        limits:
-          memory: 5256M
     depends_on:
       - redis
-    command: redis-server --maxmemory 200mb --maxmemory-policy allkeys-lru
