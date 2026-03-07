@@ -99,11 +99,6 @@ async def get_last_message():
         return {"last_message": "No messages received yet."}
 
 
-@app.get("/api/hello")
-def hello():
-    return {"message": "Hello, World!"}
-
-
 @app.get("/")
 def root():
     return {"message": "Welcome to the CradleWave API"}

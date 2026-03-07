@@ -81,11 +81,6 @@ def hello():
     return {"message": "Hello, World!"}
 
 
-@app.get("/")
-def root():
-    return {"message": "Welcome to the CradleWave API"}
-
-
 @app.get("/api/redis-info")
 def redis_info():
     global redis_conn
