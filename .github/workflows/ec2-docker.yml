@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "webdev/backend/**"
+      - ".github/workflows/ec2-docker.yml"
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: smileyniloc/cradlewave-backend
@@ -92,10 +96,10 @@ jobs:
         run: |
           # Create the directory on the EC2 instance first
           ssh cradlewave-ec2 "mkdir -p ~/webdev/backend"
-          
+
           # Copy the file using the correct local path
           scp webdev/backend/docker-compose.yml cradlewave-ec2:~/webdev/backend/docker-compose.yml
-          
+
           ssh cradlewave-ec2 << 'EOF'
             set -e  # Exit immediately if a command fails
             
