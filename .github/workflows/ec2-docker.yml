@@ -158,7 +158,7 @@ jobs:
       - name: Deploy to EC2
         run: |
           ssh cradlewave-ec2 "mkdir -p ~/webdev/backend"
-          scp webdev/backend/docker-compose.yml cradlewave-ec2:~/webdev/backend/docker-compose.yml
+          scp webdev/backend/docker-compose.yml cradlewave-ec2:~/docker-compose.yml
 
           ssh cradlewave-ec2 << 'EOF'
             set -e
