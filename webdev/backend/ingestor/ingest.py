@@ -27,9 +27,12 @@ credentials_provider = auth.AwsCredentialsProvider.new_default_chain()
 
 # Callback function for when a message is received (for testing)
 def on_message_received(topic, payload, **kwargs):
-    global last_message
-    print(f"Received message on topic {topic}: {payload}")
-    last_message = json.loads(payload)
+    # global last_message
+    # print(f"Received message on topic {topic}: {payload}")
+    sensor_data = json.dumps(payload)
+    # Store the message in Redis
+    if redis_conn:
+        redis_conn.lpush("raw_sensor_data", sensor_data)
 
 
 @asynccontextmanager
@@ -114,6 +117,3 @@ def redis_info():
         return {"redis_info": info}
     except Exception as e:
         return {"error": f"Failed to get Redis info: {str(e)}"}
-
-
-# CHANGE SO THAT WORKFLOW GENERATES THE REQUIRENMENTS>TXT FILE
