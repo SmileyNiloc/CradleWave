@@ -18,11 +18,11 @@ print("Listening for incoming tasks...")
 while True:
     # Blocks instantly until Redis gets a new item
     # queue_name is the Redis key, item is the actual payload
-    queue_name, data = r.blpop("raw_sensor_data", 0)
+    queue_name, msg = r.blpop("raw_sensor_data", 0)
 
     # Depackage the data from sensor stream (if needed)
     # Should be an array of float 32s
-    print(f"Received data: {data}")
+    print(f"Received msg: {msg}")
 
     # Instantly hand off to the internal Python queue and go right back to listening
-    process_data(data)
+    process_data(msg["data"])
