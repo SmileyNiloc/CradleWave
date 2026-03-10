@@ -11,7 +11,7 @@ RUN poetry config virtualenvs.create false \
     && poetry install --no-interaction --no-ansi --no-root
 
 # Set the working directory in the container
-WORKDIR /app
+# WORKDIR /ingestor
 
 # Copy the rest of the application code to the working directory
 COPY . .
