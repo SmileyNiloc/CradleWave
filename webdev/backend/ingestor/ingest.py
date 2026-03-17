@@ -93,15 +93,6 @@ async def test_publish():
     return {"status": "Message sent from route!"}
 
 
-@app.get("/api/last-message")
-async def get_last_message():
-    global last_message
-    if last_message is not None:
-        return {"last_message": last_message}
-    else:
-        return {"last_message": "No messages received yet."}
-
-
 @app.get("/")
 def root():
     return {"message": "Welcome to the CradleWave API"}
