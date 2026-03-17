@@ -1,6 +1,5 @@
 from fastapi import FastAPI  # type: ignore
 from contextlib import asynccontextmanager
-from awsiot import mqtt_connection_builder  # type: ignore
 from awscrt import mqtt, auth  # type: ignore
 from fastapi.middleware.cors import (  # pyright: ignore[reportMissingImports]
     CORSMiddleware,
@@ -30,10 +29,6 @@ async def lifespan(app: FastAPI):
     redis_conn = redis.Redis(host="redis", port=6379, decode_responses=True)
 
     yield  # The app runs here
-
-    # --- Shutdown: Clean up ---
-    print("Disconnecting...")
-    mqtt_conn.disconnect().result()
 
 
 app = FastAPI(lifespan=lifespan)
