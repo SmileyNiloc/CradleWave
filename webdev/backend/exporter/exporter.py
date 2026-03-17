@@ -80,4 +80,3 @@ def redis_info():
         return {"error": f"Failed to get Redis info: {str(e)}"}
 
 
-# CHANGE SO THAT WORKFLOW GENERATES THE REQUIRENMENTS>TXT FILE

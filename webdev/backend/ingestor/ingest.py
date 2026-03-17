@@ -1,11 +1,8 @@
-from fastapi import FastAPI  # type: ignore
 from contextlib import asynccontextmanager
 from awsiotsdk import mqtt_connection_builder  # type: ignore
 from awscrt import mqtt, auth  # type: ignore
-from fastapi.middleware.cors import (  # pyright: ignore[reportMissingImports]
-    CORSMiddleware,
-)  # Import the middleware
 import json, redis
+import asyncio
 
 # List of origins that are allowed to make requests
 origins = [
@@ -36,7 +33,7 @@ def on_message_received(topic, payload, **kwargs):
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan():
     # --- Startup: Connect to IoT Core ---
     global mqtt_conn
     mqtt_conn = mqtt_connection_builder.websockets_with_default_aws_signing(
@@ -71,40 +68,18 @@ async def lifespan(app: FastAPI):
     mqtt_conn.disconnect().result()
 
 
-app = FastAPI(lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-@app.get("/api/publish-test")
-async def test_publish():
-    # Now you can use the global connection inside your routes
-    mqtt_conn.publish(
-        topic="sdk/test/ec2",
-        payload='{"status": "API is live"}',
-        qos=mqtt.QoS.AT_LEAST_ONCE,
-    )
-    return {"status": "Message sent from route!"}
-
-
-@app.get("/")
-def root():
-    return {"message": "Welcome to the CradleWave API"}
-
-
-@app.get("/api/redis-info")
-def redis_info():
-    global redis_conn
-    if redis_conn is None:
-        return {"error": "Redis connection not established."}
+async def _run_forever():
+    """Run the lifespan and wait until interrupted (Ctrl+C)."""
     try:
-        info = redis_conn.info()
-        return {"redis_info": info}
-    except Exception as e:
-        return {"error": f"Failed to get Redis info: {str(e)}"}
+        async with lifespan():
+            print("Running. Press Ctrl+C to exit.")
+            await asyncio.Event().wait()
+    except asyncio.CancelledError:
+        pass
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(_run_forever())
+    except KeyboardInterrupt:
+        print("Interrupted — exiting")
