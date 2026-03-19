@@ -18,8 +18,8 @@ services:
     image: ghcr.io/smileyniloc/cradlewave-processor:main
     container_name: cradlewave-processor
     restart: unless-stopped
-  depends_on:
-    - redis
+    depends_on:
+      - redis
 
   exporter:
     image: ghcr.io/smileyniloc/cradlewave-exporter:main
