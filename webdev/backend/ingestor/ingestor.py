@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from awsiotsdk import mqtt_connection_builder  # type: ignore
+from awsiot import mqtt_connection_builder  # type: ignore
 from awscrt import mqtt, auth  # type: ignore
 import json, redis
 import asyncio
