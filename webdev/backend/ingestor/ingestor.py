@@ -26,8 +26,8 @@ credentials_provider = auth.AwsCredentialsProvider.new_default_chain()
 def on_message_received(topic, payload, **kwargs):
     # global last_message
     # print(f"Received message on topic {topic}: {payload}")
-    sensor_data = json.dumps(payload)
-    # Store the message in Redis
+    sensor_data = payload.decode("utf-8")  # Decode bytes to string
+    # Store the message in Redis as a stringified JSON
     if redis_conn:
         redis_conn.lpush("raw_sensor_data", sensor_data)
 

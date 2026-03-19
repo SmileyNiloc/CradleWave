@@ -7,7 +7,8 @@ import json
 def process_data(data_points):
     # Test calculation:
     avg = sum(data_points) / len(data_points)
-    r.lpush("processed_data", {"time": time.time(), "average": avg})
+    result = {"time": time.time(), "average": avg}
+    r.lpush("processed_data", json.dumps(result))
 
 
 # 4. The Producer (Main Thread) listening to Redis
@@ -24,5 +25,8 @@ while True:
     # Should be an array of float 32s
     print(f"Received msg: {msg}")
 
+    msg_dict = json.loads(msg)
+    data_points = msg_dict["data"]
+
     # Instantly hand off to the internal Python queue and go right back to listening
-    process_data(msg["data"])
+    process_data(data_points)
