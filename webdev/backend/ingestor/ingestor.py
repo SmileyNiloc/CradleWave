@@ -27,6 +27,7 @@ def on_message_received(topic, payload, **kwargs):
     # global last_message
     # print(f"Received message on topic {topic}: {payload}")
     sensor_data = payload.decode("utf-8")  # Decode bytes to string
+    # Redis only stores bytes or strings, MAYBE CHANGE TO JUST INPUT raw BYTES AND THEN LOAD IN PROCESSOR
     # Store the message in Redis as a stringified JSON
     if redis_conn:
         redis_conn.lpush("raw_sensor_data", sensor_data)

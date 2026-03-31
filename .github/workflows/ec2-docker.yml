@@ -125,7 +125,7 @@ jobs:
           cache-to: type=gha,scope=ingestor,mode=max
 
   # ──────────────────────────────────────────────────────────────
-  # 3. Deploy to EC2 (runs after all builds, even if some skipped)
+  # 3. Deploy to Oracle VM (runs after all builds)
   # ──────────────────────────────────────────────────────────────
   deploy:
     needs: [changes, build_exporter, build_processor, build_ingestor]
@@ -134,36 +134,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-2
-          role-session-name: github-actions-ec2
-
       - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/cradlewave.pem
+          echo "${{ secrets.ORACLE_SSH_PRIVATE_KEY }}" > ~/.ssh/cradlewave.pem
           chmod 600 ~/.ssh/cradlewave.pem
-          cat <<EOF > ~/.ssh/config
-          Host cradlewave-ec2
-              HostName i-00476f32b32bce525
-              User ubuntu
-              IdentityFile ~/.ssh/cradlewave.pem
-              ProxyCommand aws ec2-instance-connect open-tunnel --instance-id %h --region us-east-2
-              StrictHostKeyChecking no
-          EOF
 
-      - name: Deploy to EC2
+      - name: Deploy to Oracle VM
+        env:
+          VM_IP: ${{ secrets.ORACLE_VM_IP }}
         run: |
-          ssh cradlewave-ec2 "mkdir -p ~/webdev/backend"
-          scp webdev/backend/docker-compose.yml cradlewave-ec2:~/docker-compose.yml
+          # Create target directory
+          ssh -i ~/.ssh/cradlewave.pem -o StrictHostKeyChecking=no ubuntu@$VM_IP "mkdir -p ~/webdev/backend"
 
-          ssh cradlewave-ec2 << 'EOF'
+          # Copy docker-compose.yml to the CORRECT folder
+          scp -i ~/.ssh/cradlewave.pem -o StrictHostKeyChecking=no webdev/backend/docker-compose.yml ubuntu@$VM_IP:~/webdev/backend/docker-compose.yml
+
+          # Authenticate, Pull, and Run
+          ssh -i ~/.ssh/cradlewave.pem -o StrictHostKeyChecking=no ubuntu@$VM_IP << EOF
             set -e
+            
+            # Authenticate VM with GitHub Container Registry
+            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
             cd ~/webdev/backend
-            docker compose pull
-            docker compose up -d --remove-orphans
-            docker image prune -f
+            sudo docker compose pull
+            sudo docker compose up -d --remove-orphans
+            sudo docker image prune -f
           EOF
