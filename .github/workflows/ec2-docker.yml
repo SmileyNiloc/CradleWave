@@ -126,6 +126,7 @@ jobs:
 
   # ──────────────────────────────────────────────────────────────
   # 3. Deploy to Oracle VM (runs after all builds)
+  # Uses SSH to copy docker-compose.yml and trigger a pull + restart on the VM
   # ──────────────────────────────────────────────────────────────
   deploy:
     needs: [changes, build_exporter, build_processor, build_ingestor]
