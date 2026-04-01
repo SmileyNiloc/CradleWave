@@ -1,14 +1,17 @@
 from contextlib import asynccontextmanager
 from awsiot import mqtt_connection_builder  # type: ignore
 from awscrt import mqtt, auth  # type: ignore
-import json, redis
-import asyncio
+import json, redis, os, asyncio
 
 # List of origins that are allowed to make requests
 origins = [
     # "http://localhost:5047",
     "*"
 ]
+
+ROOT_CA_PATH = os.environ.get("AWS_ROOT_CA", "./AmazonRootCA1.pem")
+PRIVATE_KEY_PATH = os.environ.get("AWS_PRIVATE_KEY", "./private.pem.key")
+CERT_PATH = os.environ.get("AWS_CERT", "./certificate.pem.crt")
 
 # Global variables
 # hold persistent connection
@@ -17,9 +20,6 @@ mqtt_conn = None
 last_message = None
 # Hold Redis connection
 redis_conn = None
-
-# This is what talks to the IAM Role on your EC2
-credentials_provider = auth.AwsCredentialsProvider.new_default_chain()
 
 
 # Callback function for when a message is received (for testing)
@@ -37,11 +37,15 @@ def on_message_received(topic, payload, **kwargs):
 async def lifespan():
     # --- Startup: Connect to IoT Core ---
     global mqtt_conn
-    mqtt_conn = mqtt_connection_builder.websockets_with_default_aws_signing(
+    mqtt_conn = mqtt_connection_builder.mtls_from_path(
         endpoint="a1py3mdrrjrz1-ats.iot.us-east-2.amazonaws.com",
+        cert_filepath=CERT_PATH,
+        pri_key_filepath=PRIVATE_KEY_PATH,
+        ca_filepath=ROOT_CA_PATH,
+        client_id="CradleWave_Backend_Ingestor",  # Ensure this is unique across your fleet
+        clean_session=False,
         region="us-east-2",
-        client_id="EC2_Backend_Client",
-        credentials_provider=credentials_provider,
+        keep_alive_secs=30,
     )
 
     print("Connecting to IoT Core...")
