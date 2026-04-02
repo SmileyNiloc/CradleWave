@@ -18,6 +18,7 @@ services:
     image: ghcr.io/smileyniloc/cradlewave-processor:main
     container_name: cradlewave-processor
     restart: unless-stopped
+    network_mode: host
     depends_on:
       - redis
 
@@ -25,6 +26,7 @@ services:
     image: ghcr.io/smileyniloc/cradlewave-exporter:main
     container_name: cradlewave-exporter
     restart: unless-stopped
+    network_mode: host
     ports:
       - "8080:8080"
     depends_on:

@@ -18,9 +18,6 @@ last_message = None
 # Hold Redis connection
 redis_conn = None
 
-# This is what talks to the IAM Role on your EC2
-credentials_provider = auth.AwsCredentialsProvider.new_default_chain()
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
