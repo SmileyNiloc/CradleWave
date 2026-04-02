@@ -38,13 +38,12 @@ async def lifespan():
     # --- Startup: Connect to IoT Core ---
     global mqtt_conn
     mqtt_conn = mqtt_connection_builder.mtls_from_path(
-        endpoint="a1py3mdrrjrz1-ats.iot.us-east-2.amazonaws.com",
+        endpoint="a1py3mdrrjrz1-ats.iot.us-east-1.amazonaws.com",
         cert_filepath=CERT_PATH,
         pri_key_filepath=PRIVATE_KEY_PATH,
         ca_filepath=ROOT_CA_PATH,
         client_id="cradlewave-ingestor",  # Ensure this is unique across your fleet
         clean_session=False,
-        region="us-east-2",
         keep_alive_secs=30,
     )
 
