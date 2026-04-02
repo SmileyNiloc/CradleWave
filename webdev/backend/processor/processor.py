@@ -12,7 +12,7 @@ def process_data(data_points):
 # 4. The Producer (Main Thread) listening to Redis
 print("Connecting to Redis...")
 redis_host = os.environ.get("REDIS_HOST", "127.0.0.1")
-redis_conn = redis.Redis(host=redis_host, port=6379, decode_responses=True)
+r = redis.Redis(host=redis_host, port=6379, decode_responses=True)
 
 print("Listening for incoming tasks...")
 while True:
