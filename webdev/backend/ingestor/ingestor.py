@@ -42,7 +42,7 @@ async def lifespan():
         cert_filepath=CERT_PATH,
         pri_key_filepath=PRIVATE_KEY_PATH,
         ca_filepath=ROOT_CA_PATH,
-        client_id="CradleWave_Backend_Ingestor",  # Ensure this is unique across your fleet
+        client_id="cradlewave-ingestor",  # Ensure this is unique across your fleet
         clean_session=False,
         region="us-east-2",
         keep_alive_secs=30,
