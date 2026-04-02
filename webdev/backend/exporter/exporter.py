@@ -4,7 +4,7 @@ from awscrt import mqtt, auth  # type: ignore
 from fastapi.middleware.cors import (  # pyright: ignore[reportMissingImports]
     CORSMiddleware,
 )  # Import the middleware
-import json, redis
+import json, redis, os
 
 # List of origins that are allowed to make requests
 origins = [
@@ -26,7 +26,8 @@ credentials_provider = auth.AwsCredentialsProvider.new_default_chain()
 async def lifespan(app: FastAPI):
     # connect to Redis
     global redis_conn
-    redis_conn = redis.Redis(host="redis", port=6379, decode_responses=True)
+    redis_host = os.environ.get("REDIS_HOST", "127.0.0.1")
+    redis_conn = redis.Redis(host=redis_host, port=6379, decode_responses=True)
 
     yield  # The app runs here
 
@@ -78,5 +79,3 @@ def redis_info():
         return {"redis_info": info}
     except Exception as e:
         return {"error": f"Failed to get Redis info: {str(e)}"}
-
-
