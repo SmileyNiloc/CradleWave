@@ -9,8 +9,12 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime, timezone
 
+SERVICE_ACCOUNT_KEY = os.environ.get(
+    "GOOGLE_KEY", "/app/certs/cradlewave-aa74f-firebase-adminsdk.json"
+)
 
-cred = credentials.Certificate("path/to/serviceAccountKey.json")
+
+cred = credentials.Certificate(SERVICE_ACCOUNT_KEY)
 
 firebase_admin.initialize_app(cred)
 db = firestore.client()

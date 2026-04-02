@@ -7,6 +7,7 @@ def process_data(data_points):
     avg = sum(data_points) / len(data_points)
     result = {"time": time.time(), "average": avg}
     r.lpush("processed_data", json.dumps(result))
+    print(f"Processed data: {result}")
 
 
 # 4. The Producer (Main Thread) listening to Redis
