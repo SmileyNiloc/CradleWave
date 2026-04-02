@@ -5,6 +5,15 @@ from fastapi.middleware.cors import (  # pyright: ignore[reportMissingImports]
     CORSMiddleware,
 )  # Import the middleware
 import json, redis, os
+import firebase_admin
+from firebase_admin import credentials, firestore
+from datetime import datetime, timezone
+
+
+cred = credentials.Certificate("path/to/serviceAccountKey.json")
+
+firebase_admin.initialize_app(cred)
+db = firestore.client()
 
 # List of origins that are allowed to make requests
 origins = [
@@ -76,3 +85,28 @@ def redis_info():
         return {"redis_info": info}
     except Exception as e:
         return {"error": f"Failed to get Redis info: {str(e)}"}
+
+
+def send_vitals_to_firestore(device, collection, timestamp, heart_rate, breathing_rate):
+    data_point = {
+        timestamp: timestamp,
+        "heart_rate": heart_rate,
+        "breathing_rate": breathing_rate,
+    }
+    document_id = timestamp.strftime("%Y-%m-%d-%H")
+    doc_ref = (
+        db.collection("devices")
+        .document(device)
+        .collection(collection)
+        .document(document_id)
+    )
+    doc_ref.set({"data_points": firestore.ArrayUnion([data_point])}, merge=True)
+    print(f"Sent data point to Firestore: {data_point}")
+
+
+@app.get("api/send-firestore-test")
+def send_firestore_test():
+    # Will have to change the timestamp stuff!
+    send_vitals_to_firestore(
+        "demo_pcb", "filtered_data", datetime.now(timezone.utc), 72, 16
+    )

@@ -27,6 +27,10 @@ services:
     container_name: cradlewave-exporter
     restart: unless-stopped
     network_mode: host
+    volumes:
+      - /home/ubuntu/certs/google:/app/certs:ro
+    environment:
+      - GOOGLE_KEY=/app/certs/cradlewave-aa74f-firebase-adminsdk.json
     ports:
       - "8080:8080"
     depends_on:
@@ -40,7 +44,7 @@ services:
     depends_on:
       - redis
     volumes:
-      - /home/ubuntu/certs:/app/certs:ro
+      - /home/ubuntu/certs/amazon:/app/certs:ro
     environment:
       - AWS_ROOT_CA=/app/certs/root-CA.crt
       - AWS_PRIVATE_KEY=/app/certs/oracle-vm.private.key
