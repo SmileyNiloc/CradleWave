@@ -108,9 +108,13 @@ def send_vitals_to_firestore(device, collection, timestamp, heart_rate, breathin
     print(f"Sent data point to Firestore: {data_point}")
 
 
-@app.get("api/send-firestore-test")
+@app.get("/api/send-firestore-test")
 def send_firestore_test():
     # Will have to change the timestamp stuff!
-    send_vitals_to_firestore(
-        "demo_pcb", "filtered_data", datetime.now(timezone.utc), 72, 16
-    )
+    try:
+        send_vitals_to_firestore(
+            "demo_pcb", "filtered_data", datetime.now(timezone.utc), 72, 16
+        )
+    except Exception as e:
+        return {"error": f"Failed to send test data to Firestore: {str(e)}"}
+    return {"message": "Test data sent to Firestore"}
