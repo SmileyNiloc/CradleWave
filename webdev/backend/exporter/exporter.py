@@ -91,9 +91,15 @@ def redis_info():
         return {"error": f"Failed to get Redis info: {str(e)}"}
 
 
-def send_vitals_to_firestore(device, collection, timestamp, heart_rate, breathing_rate):
+def send_vitals_to_firestore(
+    device: str,
+    collection: str,
+    timestamp: datetime,
+    heart_rate: int,
+    breathing_rate: int,
+):
     data_point = {
-        timestamp: timestamp,
+        "timestamp": timestamp,
         "heart_rate": heart_rate,
         "breathing_rate": breathing_rate,
     }
@@ -116,5 +122,5 @@ def send_firestore_test():
             "demo_pcb", "filtered_data", datetime.now(timezone.utc), 72, 16
         )
     except Exception as e:
-        return {"error": f"Failed to send test data to Firestore: {str(e)}"}
-    return {"message": "Test data sent to Firestore"}
+        return {"error": f"Failed to send test data to Firestore: {str(e)}\n"}
+    return {"message": "Test data sent to Firestore\n"}
