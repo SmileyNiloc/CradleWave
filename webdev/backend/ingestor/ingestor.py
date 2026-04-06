@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from awsiot import mqtt_connection_builder  # type: ignore
-from awscrt import mqtt, auth  # type: ignore
+from awscrt import mqtt  # type: ignore
 import json, redis, os, asyncio
 
 # List of origins that are allowed to make requests
