@@ -2,10 +2,18 @@ import redis, os, time, json
 
 
 # 2. Define the background worker function
-def process_data(data_points):
+def process_data(data_points, timestamp):
     # Test calculation:
     avg = sum(data_points) / len(data_points)
-    result = {"time": time.time(), "average": avg}
+    heart_rate = avg
+    breathing_rate = avg / 4
+
+    # Send the heart rate, breathing rate, and timestamp to redis to be exported.
+    result = {
+        "timestamp": timestamp,
+        "heart_rate": heart_rate,
+        "breathing_rate": breathing_rate,
+    }
     r.lpush("processed_data", json.dumps(result))
     print(f"Processed data: {result}")
 
@@ -26,7 +34,6 @@ while True:
     print(f"Received msg: {msg}")
 
     msg_dict = json.loads(msg)
-    data_points = msg_dict["data"]
-
     # Instantly hand off to the internal Python queue and go right back to listening
-    process_data(data_points)
+    # Float32 array is stored in msg)dict["data"]
+    process_data(msg_dict["data"], msg_dict["timestamp"])

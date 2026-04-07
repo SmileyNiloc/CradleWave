@@ -39,6 +39,10 @@ async def lifespan(app: FastAPI):
     redis_host = os.environ.get("REDIS_HOST", "127.0.0.1")
     redis_conn = redis.Redis(host=redis_host, port=6379, decode_responses=True)
 
+    listen_to_queue(
+        "processed_data"
+    )  # Start listening to the Redis queue in the background
+
     yield  # The app runs here
 
 
@@ -112,6 +116,37 @@ def send_vitals_to_firestore(
     )
     doc_ref.set({"data_points": firestore.ArrayUnion([data_point])}, merge=True)
     print(f"Sent data point to Firestore: {data_point}")
+
+
+def listen_to_queue(queue_name: str):
+    global redis_conn
+    if redis_conn is None:
+        print("Redis connection not established.")
+        return
+    while True:
+        try:
+            message = redis_conn.blpop(queue_name, timeout=0)
+            if message:
+                _, data = message
+                print(f"Received message from Redis: {data}")
+                # Process the data and send to Firestore
+                # For example, if data is a JSON string with heart_rate and breathing_rate:
+                try:
+                    data_dict = json.loads(data)
+                    timestamp = datetime.fromtimestamp(
+                        data_dict.get("timestamp", 0) / 1000
+                    )  # Assuming timestamp is in milliseconds
+                    send_vitals_to_firestore(
+                        device="demo_pcb",
+                        collection="filtered_data",
+                        timestamp=timestamp,
+                        heart_rate=data_dict.get("heart_rate", 0),
+                        breathing_rate=data_dict.get("breathing_rate", 0),
+                    )
+                except json.JSONDecodeError as e:
+                    print(f"Failed to decode JSON: {str(e)}")
+        except Exception as e:
+            print(f"Error while listening to Redis queue: {str(e)}")
 
 
 @app.get("/api/send-firestore-test")

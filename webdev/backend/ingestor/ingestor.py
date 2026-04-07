@@ -30,6 +30,10 @@ def on_message_received(topic, payload, **kwargs):
     print(f"Decoded sensor data: {sensor_data}")
     # Redis only stores bytes or strings, MAYBE CHANGE TO JUST INPUT raw BYTES AND THEN LOAD IN PROCESSOR
     # Store the message in Redis as a stringified JSON
+    # Should be 2 things in the sensor data:
+    # 1. An array of float32s representing the raw sensor data
+    # 2. A timestamp of when the data was collected (Unix Epoch Time in milliseconds)
+    # 3. Maybe other metadata like device ID, etc. (can be added later if needed)?
     if redis_conn:
         redis_conn.lpush("raw_sensor_data", sensor_data)
         print("Pushed data to Redis")
@@ -53,7 +57,8 @@ async def lifespan():
     mqtt_conn.connect().result()
     print("Connected!")
 
-    subscribe_topic = "sdk/test/"
+    # Subscribe to the MQTT node where the sensor data is published
+    subscribe_topic = "raw_sensor_data"
 
     subscribe_future, packet_id = mqtt_conn.subscribe(
         topic=subscribe_topic,
