@@ -4,7 +4,8 @@ from awscrt import mqtt, auth  # type: ignore
 from fastapi.middleware.cors import (  # pyright: ignore[reportMissingImports]
     CORSMiddleware,
 )  # Import the middleware
-import json, redis, os
+import json, os, asyncio
+import redis.asyncio as redis
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime, timezone
@@ -39,8 +40,8 @@ async def lifespan(app: FastAPI):
     redis_host = os.environ.get("REDIS_HOST", "127.0.0.1")
     redis_conn = redis.Redis(host=redis_host, port=6379, decode_responses=True)
 
-    listen_to_queue(
-        "processed_data"
+    asyncio.create_task(
+        listen_to_queue("processed_data")
     )  # Start listening to the Redis queue in the background
 
     yield  # The app runs here
@@ -63,7 +64,7 @@ async def redis_test():
     if redis_conn is None:
         return {"error": "Redis connection not established."}
     try:
-        processor_data = redis_conn.lpop("processed_data")
+        processor_data = await redis_conn.lpop("processed_data")
         return {"redis_test": processor_data}
     except Exception as e:
         return {"error": f"Failed to test Redis connection: {str(e)}"}
@@ -84,12 +85,12 @@ def root():
 
 
 @app.get("/api/redis-info")
-def redis_info():
+async def redis_info():
     global redis_conn
     if redis_conn is None:
         return {"error": "Redis connection not established."}
     try:
-        info = redis_conn.info()
+        info = await redis_conn.info()
         return {"redis_info": info}
     except Exception as e:
         return {"error": f"Failed to get Redis info: {str(e)}"}
@@ -118,14 +119,14 @@ def send_vitals_to_firestore(
     print(f"Sent data point to Firestore: {data_point}")
 
 
-def listen_to_queue(queue_name: str):
+async def listen_to_queue(queue_name: str):
     global redis_conn
     if redis_conn is None:
         print("Redis connection not established.")
         return
     while True:
         try:
-            message = redis_conn.blpop(queue_name, timeout=0)
+            message = await redis_conn.blpop(queue_name, timeout=0)
             if message:
                 _, data = message
                 print(f"Received message from Redis: {data}")
@@ -136,7 +137,9 @@ def listen_to_queue(queue_name: str):
                     timestamp = datetime.fromtimestamp(
                         data_dict.get("timestamp", 0) / 1000
                     )  # Assuming timestamp is in milliseconds
-                    send_vitals_to_firestore(
+                    # Firestore is synchronous, we run in background thread
+                    await asyncio.to_thread(
+                        send_vitals_to_firestore,
                         device="demo_pcb",
                         collection="filtered_data",
                         timestamp=timestamp,
@@ -147,6 +150,7 @@ def listen_to_queue(queue_name: str):
                     print(f"Failed to decode JSON: {str(e)}")
         except Exception as e:
             print(f"Error while listening to Redis queue: {str(e)}")
+            await asyncio.sleep(1) # Prevent tight loop on error
 
 
 @app.get("/api/send-firestore-test")

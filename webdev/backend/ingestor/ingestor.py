@@ -57,6 +57,11 @@ async def lifespan():
     mqtt_conn.connect().result()
     print("Connected!")
 
+    # connect to Redis
+    global redis_conn
+    redis_host = os.environ.get("REDIS_HOST", "127.0.0.1")
+    redis_conn = redis.Redis(host=redis_host, port=6379, decode_responses=True)
+
     # Subscribe to the MQTT node where the sensor data is published
     subscribe_topic = "raw_sensor_data"
 
@@ -67,11 +72,6 @@ async def lifespan():
     )
     subscribe_result = subscribe_future.result()
     print(f"Subscribed to {subscribe_topic} with {subscribe_result['qos']} QoS")
-
-    # connect to Redis
-    global redis_conn
-    redis_host = os.environ.get("REDIS_HOST", "127.0.0.1")
-    redis_conn = redis.Redis(host=redis_host, port=6379, decode_responses=True)
 
     yield  # The app runs here
 
