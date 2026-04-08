@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from awsiot import mqtt_connection_builder  # type: ignore
 from awscrt import mqtt  # type: ignore
 import json, redis, os, asyncio
+import logging, time
 
 # List of origins that are allowed to make requests
 origins = [
@@ -21,22 +22,54 @@ last_message = None
 # Hold Redis connection
 redis_conn = None
 
+# Setup a basic logger
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+# Global variables to track throughput
+message_count = 0
+last_log_time = time.time()
+message_length = 0
+
 
 # Callback function for when a message is received (for testing)
 def on_message_received(topic, payload, **kwargs):
-    # global last_message
-    # print(f"Received message on topic {topic}: {payload}")
-    sensor_data = payload.decode("utf-8")  # Decode bytes to string
-    print(f"Decoded sensor data: {sensor_data}")
-    # Redis only stores bytes or strings, MAYBE CHANGE TO JUST INPUT raw BYTES AND THEN LOAD IN PROCESSOR
-    # Store the message in Redis as a stringified JSON
-    # Should be 2 things in the sensor data:
-    # 1. An array of float32s representing the raw sensor data
-    # 2. A timestamp of when the data was collected (Unix Epoch Time in milliseconds)
-    # 3. Maybe other metadata like device ID, etc. (can be added later if needed)?
-    if redis_conn:
-        redis_conn.lpush("raw_sensor_data", sensor_data)
-        print("Pushed data to Redis")
+    global message_count, last_log_time, message_length
+
+    try:
+        # --- Core Business Logic ---
+        sensor_data = payload.decode("utf-8")
+
+        if redis_conn:
+            # Note: Storing raw bytes directly might be slightly faster,
+            # but decoding to utf-8 is fine if your Redis consumer expects strings
+            redis_conn.lpush("raw_sensor_data", sensor_data)
+
+        # --- Logging Logic ---
+        message_count += 1
+        message_length += len(payload)
+        current_time = time.time()
+
+        # Only output an INFO log every 5 seconds
+        if current_time - last_log_time >= 5.0:
+            time_elapsed = current_time - last_log_time
+            logger.info(
+                f"Health Check: Pushed {message_count} messages to Redis in the last {time_elapsed:.1f} seconds. payload handled per second (MB): {(message_length/1024/1024)/time_elapsed:.2f} MB/s"
+            )
+
+            # Reset the counters
+            message_count = 0
+            message_length = 0
+            last_log_time = current_time
+
+    except Exception as e:
+        # ALWAYS log errors immediately.
+        # exc_info=True prints the full traceback to docker logs so you can debug it.
+        logger.error(
+            f"Critical error processing message on topic {topic}: {e}", exc_info=True
+        )
 
 
 @asynccontextmanager
