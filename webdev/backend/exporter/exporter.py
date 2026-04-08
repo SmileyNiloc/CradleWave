@@ -16,7 +16,9 @@ SERVICE_ACCOUNT_KEY = os.environ.get(
 cred = credentials.Certificate(SERVICE_ACCOUNT_KEY)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
-#
+
+# Global Threading event to signal shutdown
+shutdown_flag = threading.Event()
 
 
 def send_vitals_to_firestore_batch(device: str, collection: str, vitals_list: list):
@@ -65,10 +67,10 @@ def redis_firestore_batch_worker(
     """
     Continuously listens to the Redis list and flushes the queue out of Redis in bulk.
     """
-    while True:
+    while not shutdown_flag.is_set():
         try:
             # 1. Block until at least one item is available
-            _, data = redis_conn.brpop(redis_name, timeout=0)
+            _, data = redis_conn.brpop(redis_name, timeout=2)
 
             if not data:
                 continue
@@ -84,7 +86,10 @@ def redis_firestore_batch_worker(
 
                 # Execute all RPOPs in one network round trip
                 additional_items = pipe.execute()
-                raw_items.extend(additional_items)
+                valid_additional_items = [
+                    item for item in additional_items if item is not None
+                ]
+                raw_items.extend(valid_additional_items)
 
             # 3. Process the entire batch in one loop
             batch = []
@@ -134,3 +139,6 @@ if __name__ == "__main__":
             time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Shutting down workers...")
+        shutdown_flag.set()
+        redis_firestore_worker.join()  # Waits for the thread to exit cleanly
+        logger.info("Worker shutdown complete.")
