@@ -1,202 +1,136 @@
-from fastapi import FastAPI  # type: ignore
-from contextlib import asynccontextmanager
-from awscrt import mqtt, auth  # type: ignore
-from fastapi.middleware.cors import (  # pyright: ignore[reportMissingImports]
-    CORSMiddleware,
-)  # Import the middleware
-import json, os, asyncio, logging, time
-import redis.asyncio as redis
-import firebase_admin
+import logging, os, firebase_admin, threading, redis, queue, time, json
 from firebase_admin import credentials, firestore
-from datetime import datetime, timezone
+from datetime import datetime
 
-# Setup a basic logger
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
+# Setup Google Firestore Connection
 SERVICE_ACCOUNT_KEY = os.environ.get(
     "GOOGLE_KEY", "/app/certs/cradlewave-aa74f-firebase-adminsdk.json"
 )
 
-
 cred = credentials.Certificate(SERVICE_ACCOUNT_KEY)
-
 firebase_admin.initialize_app(cred)
 db = firestore.client()
-
-# List of origins that are allowed to make requests
-origins = [
-    # "http://localhost:5047",
-    "*"
-]
-
-# Global variables
-# Hold last value (testing)
-last_message = None
-# Hold Redis connection
-redis_conn = None
+#
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # connect to Redis
-    global redis_conn
+def send_vitals_to_firestore_batch(device: str, collection: str, vitals_list: list):
+    """
+    vitals_list should be a list of dicts:
+    [{'timestamp': dt, 'heart_rate': 70, 'breathing_rate': 16}, ...]
+    """
+    batch = db.batch()
+
+    # 1. Group data by document_id (the hour) to avoid multiple updates to one doc
+    grouped_data = {}
+
+    for v in vitals_list:
+        doc_id = v["timestamp"].strftime("%Y-%m-%d-%H")
+        if doc_id not in grouped_data:
+            grouped_data[doc_id] = []
+
+        # Prepare the data point exactly as before
+        grouped_data[doc_id].append(
+            {
+                "timestamp": v["timestamp"],
+                "heart_rate": v["heart_rate"],
+                "breathing_rate": v["breathing_rate"],
+            }
+        )
+
+    # 2. Add each unique document update to the batch
+    for doc_id, points in grouped_data.items():
+        doc_ref = (
+            db.collection("devices")
+            .document(device)
+            .collection(collection)
+            .document(doc_id)
+        )
+
+        # Use ArrayUnion with the entire list of points for that hour
+        batch.set(doc_ref, {"data_points": firestore.ArrayUnion(points)}, merge=True)
+
+    # 3. Commit the batch
+    batch.commit()
+
+
+def redis_firestore_batch_worker(
+    redis_conn, device, collection, redis_name, batch_size=100
+):
+    """
+    Continuously listens to the Redis list and flushes the queue out of Redis in bulk.
+    """
+    while True:
+        try:
+            # 1. Block until at least one item is available
+            _, data = redis_conn.brpop(redis_name, timeout=0)
+
+            if not data:
+                continue
+
+            # Start a list of RAW strings
+            raw_items = [data]
+
+            # 2. Pipeline the rest of the batch
+            if batch_size > 1:
+                pipe = redis_conn.pipeline()
+                for _ in range(batch_size - 1):
+                    pipe.rpop(redis_name)
+
+                # Execute all RPOPs in one network round trip
+                additional_items = pipe.execute()
+                raw_items.extend(additional_items)
+
+            # 3. Process the entire batch in one loop
+            batch = []
+            for item in raw_items:
+                if item is not None:
+                    try:
+                        item_json = json.loads(item)
+                        # Convert epoch ms to datetime for EVERY item
+                        item_json["timestamp"] = datetime.fromtimestamp(
+                            item_json.get("timestamp", 0) / 1000
+                        )
+                        batch.append(item_json)
+                    except Exception as parse_e:
+                        logger.error(f"Error parsing JSON/Date: {parse_e}")
+
+            # 4. Send to Firestore
+            if batch:
+                try:
+                    send_vitals_to_firestore_batch(device, collection, batch)
+                    logger.info(
+                        f"Flushed batch of {len(batch)} data points to Firestore"
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending batch to Firestore: {e}")
+                    if raw_items:
+                        redis_conn.lpush(redis_name, *raw_items)
+
+        except Exception as e:
+            logger.error(f"Error in batch consumer: {e}")
+            time.sleep(1)  # Back off on error
+
+
+if __name__ == "__main__":
+    # Setup Redis Connection
+    redis_conn = None
     redis_host = os.environ.get("REDIS_HOST", "127.0.0.1")
     redis_conn = redis.Redis(host=redis_host, port=6379, decode_responses=True)
 
-    asyncio.create_task(
-        listen_to_queue("processed_data")
-    )  # Start listening to the Redis queue in the background
-
-    yield  # The app runs here
-
-
-app = FastAPI(lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-@app.get("/api/redis-data-test")
-async def redis_test():
-    global redis_conn
-    if redis_conn is None:
-        return {"error": "Redis connection not established."}
-    try:
-        processor_data = await redis_conn.lpop("processed_data")
-        return {"redis_test": processor_data}
-    except Exception as e:
-        return {"error": f"Failed to test Redis connection: {str(e)}"}
-
-
-@app.get("/api/last-message")
-async def get_last_message():
-    global last_message
-    if last_message is not None:
-        return {"last_message": last_message}
-    else:
-        return {"last_message": "No messages received yet."}
-
-
-@app.get("/")
-def root():
-    return {"message": "Welcome to the CradleWave API"}
-
-
-@app.get("/api/redis-info")
-async def redis_info():
-    global redis_conn
-    if redis_conn is None:
-        return {"error": "Redis connection not established."}
-    try:
-        info = await redis_conn.info()
-        return {"redis_info": info}
-    except Exception as e:
-        return {"error": f"Failed to get Redis info: {str(e)}"}
-
-
-def send_vitals_to_firestore(
-    device: str,
-    collection: str,
-    timestamp: datetime,
-    heart_rate: int,
-    breathing_rate: int,
-):
-    data_point = {
-        "timestamp": timestamp,
-        "heart_rate": heart_rate,
-        "breathing_rate": breathing_rate,
-    }
-    document_id = timestamp.strftime("%Y-%m-%d-%H")
-    doc_ref = (
-        db.collection("devices")
-        .document(device)
-        .collection(collection)
-        .document(document_id)
+    redis_firestore_worker = threading.Thread(
+        target=redis_firestore_batch_worker,
+        args=(redis_conn, "demo_pcb", "filtered_data", "processed_data", 250),
+        daemon=True,
     )
-    doc_ref.set({"data_points": firestore.ArrayUnion([data_point])}, merge=True)
-    # print(f"Sent data point to Firestore: {data_point}")
-
-
-async def listen_to_queue(queue_name: str):
-    global redis_conn
-    if redis_conn is None:
-        logger.error("Redis connection not established. Exiting queue listener.")
-        return
-
-    # Trackers for throttled logging
-    messages_processed = 0
-    last_log_time = time.time()
-
-    logger.info(f"Started listening to Redis queue: '{queue_name}'...")
-
-    while True:
-        try:
-            # blpop blocks until a message is available
-            message = await redis_conn.blpop(queue_name, timeout=0)
-            if message:
-                _, data = message
-
-                try:
-                    data_dict = json.loads(data)
-                    timestamp = datetime.fromtimestamp(
-                        data_dict.get("timestamp", 0) / 1000
-                    )
-
-                    # Firestore is synchronous, we run in background thread
-                    await asyncio.to_thread(
-                        send_vitals_to_firestore,
-                        device="demo_pcb",
-                        collection="filtered_data",
-                        timestamp=timestamp,
-                        heart_rate=data_dict.get("heart_rate", 0),
-                        breathing_rate=data_dict.get("breathing_rate", 0),
-                    )
-
-                    # --- Throttled Logging Logic ---
-                    messages_processed += 1
-                    current_time = time.time()
-                    time_elapsed = current_time - last_log_time
-
-                    # Log a health check every 5 seconds
-                    if time_elapsed >= 5.0:
-                        msg_per_sec = messages_processed / time_elapsed
-                        logger.info(
-                            f"Queue Health: Pushed {messages_processed} msgs to Firestore "
-                            f"in {time_elapsed:.1f}s ({msg_per_sec:.1f} msg/s)."
-                        )
-
-                        # Reset trackers
-                        messages_processed = 0
-                        last_log_time = current_time
-
-                except json.JSONDecodeError as e:
-                    # Log the specific error AND the malformed data so you can debug it
-                    logger.error(f"Failed to decode JSON: {str(e)} | Raw data: {data}")
-
-        except Exception as e:
-            # exc_info=True forces the logger to print the full traceback to Docker
-            logger.error(
-                f"Critical error while listening to Redis queue: {str(e)}",
-                exc_info=True,
-            )
-            await asyncio.sleep(1)  # Prevent tight loop on error
-
-
-@app.get("/api/send-firestore-test")
-def send_firestore_test():
-    # Will have to change the timestamp stuff!
+    redis_firestore_worker.start()
     try:
-        send_vitals_to_firestore(
-            "demo_pcb", "filtered_data", datetime.now(timezone.utc), 72, 16
-        )
-    except Exception as e:
-        return {"error": f"Failed to send test data to Firestore: {str(e)}\n"}
-    return {"message": "Test data sent to Firestore\n"}
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        logger.info("Shutting down workers...")
