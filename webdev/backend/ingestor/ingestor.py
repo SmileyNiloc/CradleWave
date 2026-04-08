@@ -119,6 +119,13 @@ def redis_batch_worker(redis_conn, batch_size=100, flush_interval=1.0):
 async def lifespan():
     monitor_thread = threading.Thread(target=logging_monitor, daemon=True)
     monitor_thread.start()
+    worker_thread = threading.Thread(
+        target=redis_batch_worker,
+        args=(redis_conn,),
+        kwargs={"batch_size": 250, "flush_interval": 0.5},
+        daemon=True,
+    )
+    worker_thread.start()
     # --- Startup: Connect to IoT Core ---
     global mqtt_conn
     mqtt_conn = mqtt_connection_builder.mtls_from_path(
