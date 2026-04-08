@@ -39,7 +39,7 @@ current_time = None
 
 def logging_monitor():
     """Runs in the background and wakes every 5 seconds to log the current throughput."""
-    global is_receiving, current_time, message_count, message_length
+    global last_log_time, current_time, message_count, message_length
 
     while True:
         time.sleep(5.0)
@@ -56,7 +56,7 @@ def logging_monitor():
 
 # Callback function for when a message is received
 def on_message_received(topic, payload, **kwargs):
-    global message_count, last_log_time, message_length, current_time
+    global message_count, message_length, current_time
 
     try:
 
