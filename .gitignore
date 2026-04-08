@@ -23,3 +23,10 @@ senior_design_report.txt
 **/.venv/
 
 webdev/backend/exporter/__pycache__/exporter.cpython-312.pyc
+mqtt_test/root-CA.crt
+mqtt_test/start.sh
+mqtt_test/caten_laptop-Policy
+mqtt_test/caten_laptop.cert.pem
+mqtt_test/caten_laptop.private.key
+mqtt_test/caten_laptop.public.key
+mqtt_test/connect_device_package.zip
