@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import queue
 from awsiot import mqtt_connection_builder  # type: ignore
 from awscrt import mqtt  # type: ignore
 import json, redis, os, asyncio
@@ -21,6 +22,7 @@ mqtt_conn = None
 last_message = None
 # Hold Redis connection
 redis_conn = None
+payload_queue = queue.Queue()
 
 # Setup a basic logger
 logging.basicConfig(
@@ -32,70 +34,40 @@ logger = logging.getLogger(__name__)
 message_count = 0
 last_log_time = time.time()
 message_length = 0
-
-# Globals for inactivity monitoring
-last_message_time = time.time()
-is_receiving = False  # True when actively getting a stream of data
-GAP_TIMEOUT_SECONDS = 10.0  # How many seconds of silence means "done"
+current_time = None
 
 
-def inactivity_monitor():
-    """Runs in the background and watches for gaps in the data stream."""
-    global is_receiving, last_message_time
+def logging_monitor():
+    """Runs in the background and wakes every 5 seconds to log the current throughput."""
+    global is_receiving, current_time, message_count, message_length
 
     while True:
-        # Check every 1 second
-        time.sleep(1.0)
+        time.sleep(5.0)
 
-        # If we were receiving data, but the time since the last message exceeds the timeout
-        if is_receiving and (time.time() - last_message_time >= GAP_TIMEOUT_SECONDS):
-            logger.info(
-                f"Stream complete/paused: No messages received for {GAP_TIMEOUT_SECONDS} seconds."
-            )
-
-            # Flush any remaining counts/bytes if you want an accurate final tally here
-            # (Optional: log the final message_count and message_length here if they didn't hit the 5s mark)
-
-            # Set to False so we don't spam this log. It will reset to True when the next message arrives.
-            is_receiving = False
+        time_elapsed = current_time - last_log_time
+        logger.info(
+            f"Health Check: Pushed {message_count} messages to Redis in the last {time_elapsed:.1f} seconds. payload handled per second (MB): {(message_length/1024/1024)/time_elapsed:.2f} MB/s"
+        )
+        # Reset the counters
+        message_count = 0
+        message_length = 0
+        last_log_time = current_time
 
 
 # Callback function for when a message is received
 def on_message_received(topic, payload, **kwargs):
-    global message_count, last_log_time, message_length
-    global last_message_time, is_receiving  # <--- Add the new globals here
+    global message_count, last_log_time, message_length, current_time
 
     try:
-        # --- Activity Tracking (NEW) ---
-        last_message_time = time.time()
 
-        # If this is the start of a new stream burst, log it
-        if not is_receiving:
-            logger.info("New data stream detected. Starting to receive messages...")
-            is_receiving = True
+        current_time = time.time()
 
-        # --- Core Business Logic ---
         sensor_data = payload.decode("utf-8")
-
-        if redis_conn:
-            redis_conn.lpush("raw_sensor_data", sensor_data)
+        payload_queue.put(sensor_data)
 
         # --- Logging Logic ---
         message_count += 1
         message_length += len(payload)
-        current_time = time.time()
-
-        # Only output an INFO log every 5 seconds
-        if current_time - last_log_time >= 5.0:
-            time_elapsed = current_time - last_log_time
-            logger.info(
-                f"Health Check: Pushed {message_count} messages to Redis in the last {time_elapsed:.1f} seconds. payload handled per second (MB): {(message_length/1024/1024)/time_elapsed:.2f} MB/s"
-            )
-
-            # Reset the counters
-            message_count = 0
-            message_length = 0
-            last_log_time = current_time
 
     except Exception as e:
         logger.error(
@@ -103,9 +75,49 @@ def on_message_received(topic, payload, **kwargs):
         )
 
 
+def redis_batch_worker(redis_conn, batch_size=100, flush_interval=1.0):
+    """
+    periodically flushes the queue into Redis in bulk.
+    """
+    while True:
+        batch = []
+        # Collect up to batch_size items
+        try:
+            # Wait for at least one item to avoid a busy loop
+            first_item = payload_queue.get(timeout=flush_interval)
+            batch.append(first_item)
+
+            # Grab more items if available, up to batch_size
+            while len(batch) < batch_size:
+                try:
+                    batch.append(payload_queue.get_nowait())
+                except queue.Empty:
+                    break
+        except queue.Empty:
+            # No items arrived within flush_interval, loop again
+            continue
+
+        if batch:
+            try:
+                # Use a pipeline for O(1) network trip
+                pipe = redis_conn.pipeline()
+                for item in batch:
+                    # LPUSH for FIFO (paired with RPOP on the consumer side)
+                    pipe.lpush("raw_sensor_data", item)
+                pipe.execute()
+
+                # Mark queue tasks as done
+                for _ in range(len(batch)):
+                    payload_queue.task_done()
+
+            except Exception as e:
+                logger.error(f"Redis Batch Error: {e}")
+                # Optional: Re-queue items or handle retry logic
+
+
 @asynccontextmanager
 async def lifespan():
-    monitor_thread = threading.Thread(target=inactivity_monitor, daemon=True)
+    monitor_thread = threading.Thread(target=logging_monitor, daemon=True)
     monitor_thread.start()
     # --- Startup: Connect to IoT Core ---
     global mqtt_conn
