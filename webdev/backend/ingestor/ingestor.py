@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from awsiot import mqtt_connection_builder  # type: ignore
 from awscrt import mqtt  # type: ignore
 import json, redis, os, asyncio
-import logging, time
+import logging, time, threading
 
 # List of origins that are allowed to make requests
 origins = [
@@ -33,18 +33,51 @@ message_count = 0
 last_log_time = time.time()
 message_length = 0
 
+# Globals for inactivity monitoring
+last_message_time = time.time()
+is_receiving = False  # True when actively getting a stream of data
+GAP_TIMEOUT_SECONDS = 10.0  # How many seconds of silence means "done"
 
-# Callback function for when a message is received (for testing)
+
+def inactivity_monitor():
+    """Runs in the background and watches for gaps in the data stream."""
+    global is_receiving, last_message_time
+
+    while True:
+        # Check every 1 second
+        time.sleep(1.0)
+
+        # If we were receiving data, but the time since the last message exceeds the timeout
+        if is_receiving and (time.time() - last_message_time >= GAP_TIMEOUT_SECONDS):
+            logger.info(
+                f"Stream complete/paused: No messages received for {GAP_TIMEOUT_SECONDS} seconds."
+            )
+
+            # Flush any remaining counts/bytes if you want an accurate final tally here
+            # (Optional: log the final message_count and message_length here if they didn't hit the 5s mark)
+
+            # Set to False so we don't spam this log. It will reset to True when the next message arrives.
+            is_receiving = False
+
+
+# Callback function for when a message is received
 def on_message_received(topic, payload, **kwargs):
     global message_count, last_log_time, message_length
+    global last_message_time, is_receiving  # <--- Add the new globals here
 
     try:
+        # --- Activity Tracking (NEW) ---
+        last_message_time = time.time()
+
+        # If this is the start of a new stream burst, log it
+        if not is_receiving:
+            logger.info("New data stream detected. Starting to receive messages...")
+            is_receiving = True
+
         # --- Core Business Logic ---
         sensor_data = payload.decode("utf-8")
 
         if redis_conn:
-            # Note: Storing raw bytes directly might be slightly faster,
-            # but decoding to utf-8 is fine if your Redis consumer expects strings
             redis_conn.lpush("raw_sensor_data", sensor_data)
 
         # --- Logging Logic ---
@@ -65,8 +98,6 @@ def on_message_received(topic, payload, **kwargs):
             last_log_time = current_time
 
     except Exception as e:
-        # ALWAYS log errors immediately.
-        # exc_info=True prints the full traceback to docker logs so you can debug it.
         logger.error(
             f"Critical error processing message on topic {topic}: {e}", exc_info=True
         )
@@ -74,6 +105,8 @@ def on_message_received(topic, payload, **kwargs):
 
 @asynccontextmanager
 async def lifespan():
+    monitor_thread = threading.Thread(target=inactivity_monitor, daemon=True)
+    monitor_thread.start()
     # --- Startup: Connect to IoT Core ---
     global mqtt_conn
     mqtt_conn = mqtt_connection_builder.mtls_from_path(

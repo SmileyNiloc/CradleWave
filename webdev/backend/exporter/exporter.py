@@ -122,7 +122,7 @@ def send_vitals_to_firestore(
         .document(document_id)
     )
     doc_ref.set({"data_points": firestore.ArrayUnion([data_point])}, merge=True)
-    print(f"Sent data point to Firestore: {data_point}")
+    # print(f"Sent data point to Firestore: {data_point}")
 
 
 async def listen_to_queue(queue_name: str):

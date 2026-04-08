@@ -3,6 +3,8 @@ FROM python:3.12-slim
 
 RUN pip install --no-cache-dir poetry
 
+ENV PYTHONUNBUFFERED=1
+
 # Copy only the dependency files first (for caching)
 COPY pyproject.toml poetry.lock ./
 
