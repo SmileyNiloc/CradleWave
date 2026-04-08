@@ -4,11 +4,17 @@ from awscrt import mqtt, auth  # type: ignore
 from fastapi.middleware.cors import (  # pyright: ignore[reportMissingImports]
     CORSMiddleware,
 )  # Import the middleware
-import json, os, asyncio
+import json, os, asyncio, logging, time
 import redis.asyncio as redis
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime, timezone
+
+# Setup a basic logger
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 SERVICE_ACCOUNT_KEY = os.environ.get(
     "GOOGLE_KEY", "/app/certs/cradlewave-aa74f-firebase-adminsdk.json"
@@ -122,21 +128,28 @@ def send_vitals_to_firestore(
 async def listen_to_queue(queue_name: str):
     global redis_conn
     if redis_conn is None:
-        print("Redis connection not established.")
+        logger.error("Redis connection not established. Exiting queue listener.")
         return
+
+    # Trackers for throttled logging
+    messages_processed = 0
+    last_log_time = time.time()
+
+    logger.info(f"Started listening to Redis queue: '{queue_name}'...")
+
     while True:
         try:
+            # blpop blocks until a message is available
             message = await redis_conn.blpop(queue_name, timeout=0)
             if message:
                 _, data = message
-                print(f"Received message from Redis: {data}")
-                # Process the data and send to Firestore
-                # For example, if data is a JSON string with heart_rate and breathing_rate:
+
                 try:
                     data_dict = json.loads(data)
                     timestamp = datetime.fromtimestamp(
                         data_dict.get("timestamp", 0) / 1000
-                    )  # Assuming timestamp is in milliseconds
+                    )
+
                     # Firestore is synchronous, we run in background thread
                     await asyncio.to_thread(
                         send_vitals_to_firestore,
@@ -146,11 +159,35 @@ async def listen_to_queue(queue_name: str):
                         heart_rate=data_dict.get("heart_rate", 0),
                         breathing_rate=data_dict.get("breathing_rate", 0),
                     )
+
+                    # --- Throttled Logging Logic ---
+                    messages_processed += 1
+                    current_time = time.time()
+                    time_elapsed = current_time - last_log_time
+
+                    # Log a health check every 5 seconds
+                    if time_elapsed >= 5.0:
+                        msg_per_sec = messages_processed / time_elapsed
+                        logger.info(
+                            f"Queue Health: Pushed {messages_processed} msgs to Firestore "
+                            f"in {time_elapsed:.1f}s ({msg_per_sec:.1f} msg/s)."
+                        )
+
+                        # Reset trackers
+                        messages_processed = 0
+                        last_log_time = current_time
+
                 except json.JSONDecodeError as e:
-                    print(f"Failed to decode JSON: {str(e)}")
+                    # Log the specific error AND the malformed data so you can debug it
+                    logger.error(f"Failed to decode JSON: {str(e)} | Raw data: {data}")
+
         except Exception as e:
-            print(f"Error while listening to Redis queue: {str(e)}")
-            await asyncio.sleep(1) # Prevent tight loop on error
+            # exc_info=True forces the logger to print the full traceback to Docker
+            logger.error(
+                f"Critical error while listening to Redis queue: {str(e)}",
+                exc_info=True,
+            )
+            await asyncio.sleep(1)  # Prevent tight loop on error
 
 
 @app.get("/api/send-firestore-test")
