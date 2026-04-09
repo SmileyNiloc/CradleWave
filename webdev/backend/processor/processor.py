@@ -1,4 +1,4 @@
-import redis, os, time, json, logging
+import redis, os, time, json, logging, threading
 
 # Setup a basic logger
 logging.basicConfig(
@@ -6,9 +6,35 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+shutdown_flag = threading.Event()
+log_lock = threading.Lock()
+
+
+def logging_monitor():
+    """Runs in the background and wakes every 5 seconds to log the current throughput."""
+    global process_data_count, process_data_length
+
+    last_log_time = time.time()
+
+    while True:
+        shutdown_flag.wait(timeout=5)  # Waits for 5 seconds or until shutdown
+
+        current_time = time.time()
+        time_elapsed = current_time - last_log_time
+        with log_lock:
+            if process_data_count > 0:
+                logger.info(
+                    f"Health Check: Pushed {process_data_count} messages to Redis in the last {time_elapsed:.1f} seconds. payload handled per second (MB): {(process_data_length/1024/1024)/time_elapsed:.2f} MB/s"
+                )
+                # Reset the counters
+                process_data_count = 0
+                process_data_length = 0
+                last_log_time = current_time
+
 
 # 2. Define the background worker function
 def process_data(data_points, timestamp):
+    global process_data_count, process_data_length
     # Test calculation:
     avg = sum(data_points) / len(data_points)
     heart_rate = avg
@@ -30,7 +56,9 @@ r = redis.Redis(host=redis_host, port=6379, decode_responses=True)
 
 print("Listening for incoming tasks...")
 messages_processed = 0
-time_start = time.time()
+
+monitor_thread = threading.Thread(target=logging_monitor, daemon=True)
+monitor_thread.start()
 while True:
     # Blocks instantly until Redis gets a new item
     # queue_name is the Redis key, item is the actual payload
@@ -43,13 +71,3 @@ while True:
     # Instantly hand off to the internal Python queue and go right back to listening
     # Float32 array is stored in msg)dict["data"]
     process_data(msg_dict["data"], msg_dict["timestamp"])
-
-    messages_processed += 1
-    current_time = time.time()
-    if current_time - time_start >= 5.0:
-        time_elapsed = current_time - time_start
-        logger.info(
-            f"Health Check: Processed {messages_processed} messages in the last {time_elapsed:.1f} seconds. payload processed per second (MB): {(messages_processed*len(msg)/1024/1024)/time_elapsed:.2f} MB/s"
-        )
-        messages_processed = 0
-        time_start = current_time
