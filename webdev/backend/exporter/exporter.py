@@ -70,10 +70,10 @@ def redis_firestore_batch_worker(
     while not shutdown_flag.is_set():
         try:
             # 1. Block until at least one item is available
-            _, data = redis_conn.brpop(redis_name, timeout=2)
-
-            if not data:
-                continue
+            result = redis_conn.brpop(redis_name, timeout=2)
+            if not result:
+                continue  # Timeout occurred, loop back and check shutdown_flag
+            _, data = result
 
             # Start a list of RAW strings
             raw_items = [data]
