@@ -42,13 +42,14 @@ def logging_monitor():
         current_time = time.time()
         time_elapsed = current_time - last_log_time
         with message_lock:
-            logger.info(
-                f"Health Check: Pushed {message_count} messages to Redis in the last {time_elapsed:.1f} seconds. payload handled per second (MB): {(message_length/1024/1024)/time_elapsed:.2f} MB/s"
-            )
-            # Reset the counters
-            message_count = 0
-            message_length = 0
-        last_log_time = current_time
+            if message_count > 0:
+                logger.info(
+                    f"Health Check: Pushed {message_count} messages to Redis in the last {time_elapsed:.1f} seconds. payload handled per second (MB): {(message_length/1024/1024)/time_elapsed:.2f} MB/s"
+                )
+                # Reset the counters
+                message_count = 0
+                message_length = 0
+                last_log_time = current_time
 
 
 # Callback function for when a message is received
@@ -70,22 +71,22 @@ def on_message_received(topic, payload, **kwargs):
         )
 
 
-def redis_batch_worker(redis_conn, queue, batch_size=100, flush_interval=1.0):
+def redis_batch_worker(redis_conn, ingestion_queue, batch_size=100, flush_interval=1.0):
     """WS_ENDPOINT
     periodically flushes the queue into Redis in bulk.
     """
-    while not shutdown_flag.is_set() or not queue.empty():
+    while not shutdown_flag.is_set() or not ingestion_queue.empty():
         batch = []
         # Collect up to batch_size items
         try:
             # Wait for at least one item to avoid a busy loop
-            first_item = queue.get(timeout=flush_interval)
+            first_item = ingestion_queue.get(timeout=flush_interval)
             batch.append(first_item)
 
             # Grab more items if available, up to batch_size
             while len(batch) < batch_size:
                 try:
-                    batch.append(queue.get_nowait())
+                    batch.append(ingestion_queue.get_nowait())
                 except queue.Empty:
                     break
         except queue.Empty:
@@ -103,7 +104,7 @@ def redis_batch_worker(redis_conn, queue, batch_size=100, flush_interval=1.0):
 
                 # Mark queue tasks as done
                 for _ in range(len(batch)):
-                    queue.task_done()
+                    ingestion_queue.task_done()
 
             except Exception as e:
                 logger.error(f"Redis Batch Error: {e}")
