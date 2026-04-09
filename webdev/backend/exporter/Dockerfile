@@ -21,5 +21,5 @@ COPY . .
 # Command to run the app when the container starts
 # Uvicorn is the server that runs FastAPI.
 # The --host 0.0.0.0 makes the app accessible from outside the container.
-CMD ["python", "ingestor.py"]
+CMD ["python", "exporter.py"]
 # CMD exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}
