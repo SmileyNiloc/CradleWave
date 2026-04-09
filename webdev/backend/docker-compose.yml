@@ -49,3 +49,4 @@ services:
       - AWS_ROOT_CA=/app/certs/root-CA.crt
       - AWS_PRIVATE_KEY=/app/certs/oracle-vm.private.key
       - AWS_CERT=/app/certs/oracle-vm.cert.pem
+      - AWS_ENDPOINT=a1py3mdrrjrz1-ats.iot.us-east-1.amazonaws.com

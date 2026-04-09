@@ -1,28 +1,20 @@
-from contextlib import asynccontextmanager
-import queue
 from awsiot import mqtt_connection_builder  # type: ignore
 from awscrt import mqtt  # type: ignore
-import json, redis, os, asyncio
-import logging, time, threading
-
-# List of origins that are allowed to make requests
-origins = [
-    # "http://localhost:5047",
-    "*"
-]
+import redis, os, queue, logging, time, threading
 
 ROOT_CA_PATH = os.environ.get("AWS_ROOT_CA", "./AmazonRootCA1.pem")
 PRIVATE_KEY_PATH = os.environ.get("AWS_PRIVATE_KEY", "./private.pem.key")
 CERT_PATH = os.environ.get("AWS_CERT", "./certificate.pem.crt")
+AWS_ENDPOINT = os.environ.get(
+    "AWS_ENDPOINT", "a1py3mdrrjrz1-ats.iot.us-east-1.amazonaws.com"
+)
+
 
 # Global variables
 # hold persistent connection
 mqtt_conn = None
-# Hold last value (testing)
-last_message = None
 # Hold Redis connection
 redis_conn = None
-payload_queue = queue.Queue()
 
 # Setup a basic logger
 logging.basicConfig(
@@ -31,43 +23,46 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Global variables to track throughput
+message_lock = threading.Lock()
 message_count = 0
-last_log_time = time.time()
 message_length = 0
-current_time = None
+
+# Global Threading event to signal shutdown
+shutdown_flag = threading.Event()
 
 
 def logging_monitor():
     """Runs in the background and wakes every 5 seconds to log the current throughput."""
-    global last_log_time, current_time, message_count, message_length
+    global message_count, message_length
+    last_log_time = time.time()
 
     while True:
-        time.sleep(5.0)
+        shutdown_flag.wait(timeout=5)  # Waits for 5 seconds or until shutdown
 
+        current_time = time.time()
         time_elapsed = current_time - last_log_time
-        logger.info(
-            f"Health Check: Pushed {message_count} messages to Redis in the last {time_elapsed:.1f} seconds. payload handled per second (MB): {(message_length/1024/1024)/time_elapsed:.2f} MB/s"
-        )
-        # Reset the counters
-        message_count = 0
-        message_length = 0
+        with message_lock:
+            logger.info(
+                f"Health Check: Pushed {message_count} messages to Redis in the last {time_elapsed:.1f} seconds. payload handled per second (MB): {(message_length/1024/1024)/time_elapsed:.2f} MB/s"
+            )
+            # Reset the counters
+            message_count = 0
+            message_length = 0
         last_log_time = current_time
 
 
 # Callback function for when a message is received
 def on_message_received(topic, payload, **kwargs):
-    global message_count, message_length, current_time
+    global message_count, message_length
 
     try:
-
-        current_time = time.time()
-
         sensor_data = payload.decode("utf-8")
-        payload_queue.put(sensor_data)
+        kwargs.get("queue").put(sensor_data)
 
-        # --- Logging Logic ---
-        message_count += 1
-        message_length += len(payload)
+        with message_lock:
+            # --- Logging Logic ---
+            message_count += 1
+            message_length += len(payload)
 
     except Exception as e:
         logger.error(
@@ -75,22 +70,22 @@ def on_message_received(topic, payload, **kwargs):
         )
 
 
-def redis_batch_worker(redis_conn, batch_size=100, flush_interval=1.0):
-    """
+def redis_batch_worker(redis_conn, queue, batch_size=100, flush_interval=1.0):
+    """WS_ENDPOINT
     periodically flushes the queue into Redis in bulk.
     """
-    while True:
+    while not shutdown_flag.is_set() or not queue.empty():
         batch = []
         # Collect up to batch_size items
         try:
             # Wait for at least one item to avoid a busy loop
-            first_item = payload_queue.get(timeout=flush_interval)
+            first_item = queue.get(timeout=flush_interval)
             batch.append(first_item)
 
             # Grab more items if available, up to batch_size
             while len(batch) < batch_size:
                 try:
-                    batch.append(payload_queue.get_nowait())
+                    batch.append(queue.get_nowait())
                 except queue.Empty:
                     break
         except queue.Empty:
@@ -108,22 +103,40 @@ def redis_batch_worker(redis_conn, batch_size=100, flush_interval=1.0):
 
                 # Mark queue tasks as done
                 for _ in range(len(batch)):
-                    payload_queue.task_done()
+                    queue.task_done()
 
             except Exception as e:
                 logger.error(f"Redis Batch Error: {e}")
                 # Optional: Re-queue items or handle retry logic
 
 
-@asynccontextmanager
-async def lifespan():
+if __name__ == "__main__":
+    payload_queue = queue.Queue()
+
     monitor_thread = threading.Thread(target=logging_monitor, daemon=True)
     monitor_thread.start()
 
+    # Setup Redis Connection
+    redis_conn = None
+    redis_host = os.environ.get("REDIS_HOST", "127.0.0.1")
+    redis_conn = redis.Redis(host=redis_host, port=6379, decode_responses=True)
+    redis_conn.ping()
+    logger.info("Connected to Redis successfully.")
+
+    # Setup the worker that will batch received MQTT messages from
+    worker_thread = threading.Thread(
+        target=redis_batch_worker,
+        args=(redis_conn, payload_queue),
+        kwargs={"batch_size": 250, "flush_interval": 0.5},
+        daemon=False,
+    )
+    worker_thread.start()
+
     # --- Startup: Connect to IoT Core ---
-    global mqtt_conn
+    mqtt_conn = None
+
     mqtt_conn = mqtt_connection_builder.mtls_from_path(
-        endpoint="a1py3mdrrjrz1-ats.iot.us-east-1.amazonaws.com",
+        endpoint=AWS_ENDPOINT,
         cert_filepath=CERT_PATH,
         pri_key_filepath=PRIVATE_KEY_PATH,
         ca_filepath=ROOT_CA_PATH,
@@ -132,53 +145,26 @@ async def lifespan():
         keep_alive_secs=30,
     )
 
-    print("Connecting to IoT Core...")
     mqtt_conn.connect().result()
-    print("Connected!")
 
-    # connect to Redis
-    global redis_conn
-    redis_host = os.environ.get("REDIS_HOST", "127.0.0.1")
-    redis_conn = redis.Redis(host=redis_host, port=6379, decode_responses=True)
-
-    worker_thread = threading.Thread(
-        target=redis_batch_worker,
-        args=(redis_conn,),
-        kwargs={"batch_size": 250, "flush_interval": 0.5},
-        daemon=True,
-    )
-    worker_thread.start()
-
-    # Subscribe to the MQTT node where the sensor data is published
     subscribe_topic = "raw_sensor_data"
 
+    # Subscribe with QoS 1 (at least once delivery)
     subscribe_future, packet_id = mqtt_conn.subscribe(
         topic=subscribe_topic,
         qos=mqtt.QoS.AT_LEAST_ONCE,
-        callback=on_message_received,
+        callback=lambda topic, payload, dup, qos, retain, **kwargs: on_message_received(
+            topic, payload, queue=payload_queue
+        ),
     )
     subscribe_result = subscribe_future.result()
-    print(f"Subscribed to {subscribe_topic} with {subscribe_result['qos']} QoS")
 
-    yield  # The app runs here
-
-    # --- Shutdown: Clean up ---
-    print("Disconnecting...")
-    mqtt_conn.disconnect().result()
-
-
-async def _run_forever():
-    """Run the lifespan and wait until interrupted (Ctrl+C)."""
     try:
-        async with lifespan():
-            print("Running. Press Ctrl+C to exit.")
-            await asyncio.Event().wait()
-    except asyncio.CancelledError:
-        pass
-
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(_run_forever())
+        while not shutdown_flag.is_set():
+            time.sleep(1)
     except KeyboardInterrupt:
-        print("Interrupted — exiting")
+        logger.info("Shutting down workers...")
+        mqtt_conn.disconnect().result()
+        shutdown_flag.set()
+        worker_thread.join()  # Waits for the thread to exit cleanly
+        logger.info("Worker shutdown complete.")
