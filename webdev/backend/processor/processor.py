@@ -18,20 +18,36 @@ def logging_monitor():
 
     last_log_time = time.time()
 
-    while True:
-        shutdown_flag.wait(timeout=5)  # Waits for 5 seconds or until shutdown
+    # FIX: Exit loop gracefully if shutdown is triggered
+    while not shutdown_flag.is_set():
+        shutdown_flag.wait(timeout=5)
 
         current_time = time.time()
         time_elapsed = current_time - last_log_time
+
         with log_lock:
             if process_data_count > 0:
-                logger.info(
-                    f"Health Check: Pushed {process_data_count} messages to Redis in the last {time_elapsed:.1f} seconds. payload handled per second (MB): {(process_data_length/1024/1024)/time_elapsed:.2f} MB/s"
+                # Calculate MB/s, guarding against division by zero
+                mb_per_sec = (
+                    (process_data_length / 1024 / 1024) / time_elapsed
+                    if time_elapsed > 0
+                    else 0
                 )
+
+                logger.info(
+                    f"Health Check: Pushed {process_data_count} messages to Redis in the last {time_elapsed:.1f} seconds. "
+                    f"Payload handled per second: {mb_per_sec:.2f} MB/s"
+                )
+
                 # Reset the counters
                 process_data_count = 0
                 process_data_length = 0
-                last_log_time = current_time
+            else:
+                # OPTIONAL FIX: Give a heartbeat even when idle so you know the thread is alive
+                logger.info("Health Check: System idle. 0 messages processed.")
+
+            # FIX: Unconditionally reset the timer so math is accurate for the next window
+            last_log_time = current_time
 
 
 # 2. Define the background worker function
@@ -62,17 +78,21 @@ r = redis.Redis(host=redis_host, port=6379, decode_responses=True)
 print("Listening for incoming tasks...")
 messages_processed = 0
 
-monitor_thread = threading.Thread(target=logging_monitor, daemon=True)
+monitor_thread = threading.Thread(target=logging_monitor, daemon=False)
 monitor_thread.start()
 while True:
-    # Blocks instantly until Redis gets a new item
-    # queue_name is the Redis key, item is the actual payload
-    queue_name, msg = r.blpop("raw_sensor_data", 0)
+    try:
+        # Blocks instantly until Redis gets a new item
+        # queue_name is the Redis key, item is the actual payload
+        queue_name, msg = r.blpop("raw_sensor_data", 0)
 
-    # Depackage the data from sensor stream (if needed)
-    # Should be an array of float 32s
+        # Depackage the data from sensor stream (if needed)
+        # Should be an array of float 32s
 
-    msg_dict = json.loads(msg)
-    # Instantly hand off to the internal Python queue and go right back to listening
-    # Float32 array is stored in msg)dict["data"]
-    process_data(msg_dict["data"], msg_dict["timestamp"])
+        msg_dict = json.loads(msg)
+        # Instantly hand off to the internal Python queue and go right back to listening
+        # Float32 array is stored in msg)dict["data"]
+        process_data(msg_dict["data"], msg_dict["timestamp"])
+    except Exception as e:
+        logger.error(f"Error processing message: {e}", exc_info=True)
+        time.sleep(1)  # Back off on error
