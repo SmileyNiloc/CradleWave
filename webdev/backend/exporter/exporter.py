@@ -61,11 +61,18 @@ def send_vitals_to_firestore_batch(device: str, collection: str, vitals_list: li
     batch.commit()
 
 
+import json
+import time
+from datetime import datetime
+
+
 def redis_firestore_batch_worker(
-    redis_conn, device, collection, redis_name, batch_size=100
+    redis_conn, device, collection, redis_name, batch_size=100, wait_time=2.0
 ):
     """
-    Continuously listens to the Redis list and flushes the queue out of Redis in bulk.
+    Continuously listens to the Redis list. When an item arrives, it waits
+    a couple of seconds to allow the queue to build up, then flushes out of
+    Redis in bulk.
     """
     while not shutdown_flag.is_set():
         try:
@@ -78,7 +85,19 @@ def redis_firestore_batch_worker(
             # Start a list of RAW strings
             raw_items = [data]
 
-            # 2. Pipeline the rest of the batch
+            # 2. Wait up to `wait_time` seconds to let the queue fill up
+            # We sleep in 0.1s increments so we can still respond to shutdowns instantly
+            start_wait = time.time()
+            while (time.time() - start_wait) < wait_time and not shutdown_flag.is_set():
+                # Optimization: Stop waiting early if we already have enough items for a full batch
+                if redis_conn.llen(redis_name) >= (batch_size - 1):
+                    break
+                time.sleep(0.1)
+
+            # If shut down during the wait, we still process the single item we popped
+            # to ensure we don't lose it.
+
+            # 3. Pipeline the rest of the batch
             if batch_size > 1:
                 pipe = redis_conn.pipeline()
                 for _ in range(batch_size - 1):
@@ -91,7 +110,7 @@ def redis_firestore_batch_worker(
                 ]
                 raw_items.extend(valid_additional_items)
 
-            # 3. Process the entire batch in one loop
+            # 4. Process the entire batch in one loop
             batch = []
             for item in raw_items:
                 if item is not None:
@@ -105,7 +124,7 @@ def redis_firestore_batch_worker(
                     except Exception as parse_e:
                         logger.error(f"Error parsing JSON/Date: {parse_e}")
 
-            # 4. Send to Firestore
+            # 5. Send to Firestore
             if batch:
                 try:
                     send_vitals_to_firestore_batch(device, collection, batch)
@@ -114,6 +133,7 @@ def redis_firestore_batch_worker(
                     )
                 except Exception as e:
                     logger.error(f"Error sending batch to Firestore: {e}")
+                    # Push everything back into Redis if Firestore fails so no data is lost
                     if raw_items:
                         redis_conn.lpush(redis_name, *raw_items)
 
