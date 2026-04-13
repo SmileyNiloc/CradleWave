@@ -8,6 +8,8 @@ logger = logging.getLogger(__name__)
 
 shutdown_flag = threading.Event()
 log_lock = threading.Lock()
+process_data_count = 0
+process_data_length = 0
 
 
 def logging_monitor():
@@ -47,6 +49,9 @@ def process_data(data_points, timestamp):
         "breathing_rate": breathing_rate,
     }
     r.lpush("processed_data", json.dumps(result))
+    with log_lock:
+        process_data_count += 1
+        process_data_length += len(json.dumps(result))
 
 
 # 4. The Producer (Main Thread) listening to Redis
