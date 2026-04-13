@@ -52,47 +52,86 @@ def logging_monitor():
 
 # 2. Define the background worker function
 def process_data(data_points, timestamp):
+    # FIX: Guard against division by zero
+    if not data_points:
+        logger.warning(
+            f"Empty data array received for timestamp {timestamp}. Skipping."
+        )
+        return
+
     global process_data_count, process_data_length
-    # Test calculation:
+
     avg = sum(data_points) / len(data_points)
     heart_rate = avg
     breathing_rate = avg / 4
 
-    # Send the heart rate, breathing rate, and timestamp to redis to be exported.
     result = {
         "timestamp": timestamp,
         "heart_rate": heart_rate,
         "breathing_rate": breathing_rate,
     }
-    r.lpush("processed_data", json.dumps(result))
+
+    # FIX: Serialize only once
+    json_payload = json.dumps(result)
+
+    r.lpush("processed_data", json_payload)
+
     with log_lock:
         process_data_count += 1
-        process_data_length += len(json.dumps(result))
+        process_data_length += len(json_payload)
 
 
 # 4. The Producer (Main Thread) listening to Redis
-print("Connecting to Redis...")
-redis_host = os.environ.get("REDIS_HOST", "127.0.0.1")
-r = redis.Redis(host=redis_host, port=6379, decode_responses=True)
+if __name__ == "__main__":
+    print("Connecting to Redis...")
+    redis_host = os.environ.get("REDIS_HOST", "127.0.0.1")
 
-print("Listening for incoming tasks...")
-messages_processed = 0
-
-monitor_thread = threading.Thread(target=logging_monitor, daemon=False)
-monitor_thread.start()
-while True:
+    # Best practice: Add a health check on startup to ensure Redis is actually there
     try:
-        # Blocks instantly until Redis gets a new item
-        # queue_name is the Redis key, item is the actual payload
-        queue_name, msg = r.blpop("raw_sensor_data", 0)
+        r = redis.Redis(
+            host=redis_host, port=6379, decode_responses=True, socket_timeout=5
+        )
+        r.ping()
+        # Remove the global socket timeout after pinging so blpop can block indefinitely
+        r = redis.Redis(host=redis_host, port=6379, decode_responses=True)
+    except redis.ConnectionError as e:
+        logger.critical(f"Could not connect to Redis on startup: {e}")
+        exit(1)
 
-        # Depackage the data from sensor stream (if needed)
-        # Should be an array of float 32s
+    print("Listening for incoming tasks...")
 
-        msg_dict = json.loads(msg)
-        # Instantly hand off to the internal Python queue and go right back to listening
-        # Float32 array is stored in msg)dict["data"]
-        process_data(msg_dict["data"], msg_dict["timestamp"])
-    except Exception as e:
-        logger.error(f"Error processing message: {e}", exc_info=True)
-        time.sleep(1)  # Back off on error
+    # FIX: Daemon thread is safer here, but we will still cleanly shut it down
+    monitor_thread = threading.Thread(target=logging_monitor, daemon=True)
+    monitor_thread.start()
+
+    try:
+        # FIX: Check the shutdown flag instead of 'while True'
+        while not shutdown_flag.is_set():
+            try:
+                # Use a small timeout instead of 0 (infinite) so the loop can check the
+                # shutdown_flag periodically if no data is coming in.
+                redis_result = r.blpop("raw_sensor_data", timeout=2)
+
+                if not redis_result:
+                    continue  # Timeout hit, loop back and check shutdown_flag
+
+                queue_name, msg = redis_result
+                msg_dict = json.loads(msg)
+
+                process_data(msg_dict.get("data", []), msg_dict.get("timestamp"))
+
+            except redis.ConnectionError as e:
+                logger.error(f"Redis connection error: {e}")
+                time.sleep(2)  # Back off and let Redis recover
+            except Exception as e:
+                logger.error(f"Error processing message: {e}", exc_info=True)
+                time.sleep(1)
+
+    except KeyboardInterrupt:
+        # FIX: Catch Ctrl+C and shut down cleanly
+        logger.info("Shutdown signal received (Ctrl+C). Terminating gracefully...")
+        shutdown_flag.set()
+    finally:
+        # Wait a moment for the monitor thread to output its final log
+        monitor_thread.join(timeout=2)
+        logger.info("Processor shut down complete.")
