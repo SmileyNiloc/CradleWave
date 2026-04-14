@@ -36,8 +36,8 @@ def logging_monitor():
                 )
 
                 logger.info(
-                    f"Health Check: Pushed {process_data_count} messages of length {process_data_length} bytes to Redis in the last {time_elapsed:.1f} seconds. "
-                    f"Payload handled per second: {mb_per_sec:.2f} MB/s"
+                    f"Health Check: Pushed {process_data_count} messages to Redis in the last {time_elapsed:.1f} seconds. "
+                    f"Payload handled per second: {mb_per_sec:.4f} MB/s"
                 )
 
                 # Reset the counters
