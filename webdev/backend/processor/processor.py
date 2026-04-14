@@ -17,6 +17,7 @@ def logging_monitor():
     global process_data_count, process_data_length
 
     last_log_time = time.time()
+    health_check_idle_count = 0
 
     # FIX: Exit loop gracefully if shutdown is triggered
     while not shutdown_flag.is_set():
@@ -35,23 +36,25 @@ def logging_monitor():
                 )
 
                 logger.info(
-                    f"Health Check: Pushed {process_data_count} messages to Redis in the last {time_elapsed:.1f} seconds. "
+                    f"Health Check: Pushed {process_data_count} messages of length {process_data_length} bytes to Redis in the last {time_elapsed:.1f} seconds. "
                     f"Payload handled per second: {mb_per_sec:.2f} MB/s"
                 )
 
                 # Reset the counters
                 process_data_count = 0
                 process_data_length = 0
-            else:
+                health_check_idle_count = 0
+            elif health_check_idle_count < 3:  # Limit idle logs to avoid spamming
                 # OPTIONAL FIX: Give a heartbeat even when idle so you know the thread is alive
                 logger.info("Health Check: System idle. 0 messages processed.")
+                health_check_idle_count += 1
 
             # FIX: Unconditionally reset the timer so math is accurate for the next window
             last_log_time = current_time
 
 
 # 2. Define the background worker function
-def process_data(data_points, timestamp):
+def process_data(r, data_points, timestamp):
     # FIX: Guard against division by zero
     if not data_points:
         logger.warning(
@@ -78,7 +81,7 @@ def process_data(data_points, timestamp):
 
     with log_lock:
         process_data_count += 1
-        process_data_length += len(json_payload)
+        process_data_length += len(json_payload.encode("utf-8"))
 
 
 # 4. The Producer (Main Thread) listening to Redis
@@ -118,7 +121,7 @@ if __name__ == "__main__":
                 queue_name, msg = redis_result
                 msg_dict = json.loads(msg)
 
-                process_data(msg_dict.get("data", []), msg_dict.get("timestamp"))
+                process_data(r, msg_dict.get("data", []), msg_dict.get("timestamp"))
 
             except redis.ConnectionError as e:
                 logger.error(f"Redis connection error: {e}")
