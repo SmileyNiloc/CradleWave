@@ -150,7 +150,7 @@ if __name__ == "__main__":
 
     redis_firestore_worker = threading.Thread(
         target=redis_firestore_batch_worker,
-        args=(redis_conn, "demo_pcb", "filtered_data", "processed_data", 250),
+        args=(redis_conn, "demo_pcb", "filtered_data", "processed_data", 250, 5.0),
         daemon=True,
     )
     redis_firestore_worker.start()
