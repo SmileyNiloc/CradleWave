@@ -69,6 +69,21 @@ files = [
 awscrt = "0.31.3"
 
 [[package]]
+name = "humanize"
+version = "4.15.0"
+description = "Python humanize utilities"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "humanize-4.15.0-py3-none-any.whl", hash = "sha256:b1186eb9f5a9749cd9cb8565aee77919dd7c8d076161cf44d70e59e3301e1769"},
+    {file = "humanize-4.15.0.tar.gz", hash = "sha256:1dd098483eb1c7ee8e32eb2e99ad1910baefa4b75c3aff3a82f4d78688993b10"},
+]
+
+[package.extras]
+tests = ["freezegun", "pytest", "pytest-cov"]
+
+[[package]]
 name = "redis"
 version = "7.3.0"
 description = "Python client for Redis database and key-value store"
@@ -91,4 +106,4 @@ xxhash = ["xxhash (>=3.6.0,<3.7.0)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12"
-content-hash = "6ef2eef3fcbba1eadfea1d27b0c0d381014b3c2a887b6903a7463de38e27d8fd"
+content-hash = "323735212625b074c180b23e465b47f3bc68e8dfa64f2cc4a342e171b603eedf"

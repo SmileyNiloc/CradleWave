@@ -1,4 +1,5 @@
 import redis, os, time, json, logging, threading
+import humanize  # For better logging of data sizes
 
 # Setup a basic logger
 logging.basicConfig(
@@ -29,15 +30,13 @@ def logging_monitor():
         with log_lock:
             if process_data_count > 0:
                 # Calculate MB/s, guarding against division by zero
-                mb_per_sec = (
-                    (process_data_count * 100 / 1024 / 1024) / time_elapsed
-                    if time_elapsed > 0
-                    else 0
+                bytes_per_sec = (
+                    (process_data_length) / time_elapsed if time_elapsed > 0 else 0
                 )
 
                 logger.info(
                     f"Health Check: Pushed {process_data_count} messages to Redis in the last {time_elapsed:.1f} seconds. "
-                    f"Payload handled per second: {mb_per_sec:.4f} MB/s"
+                    f"Payload handled: {humanize.naturalsize(bytes_per_sec)}/ss"
                 )
 
                 # Reset the counters
@@ -81,7 +80,7 @@ def process_data(r, data_points, timestamp):
 
     with log_lock:
         process_data_count += 1
-        # process_data_length += len(json_payload.encode("utf-8"))
+        process_data_length += len(json_payload.encode("utf-8"))
 
 
 # 4. The Producer (Main Thread) listening to Redis

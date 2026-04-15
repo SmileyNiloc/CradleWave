@@ -1,6 +1,7 @@
 from awsiot import mqtt_connection_builder  # type: ignore
 from awscrt import mqtt  # type: ignore
 import redis, os, queue, logging, time, threading
+import humanize  # For better logging of data sizes
 
 ROOT_CA_PATH = os.environ.get("AWS_ROOT_CA", "./AmazonRootCA1.pem")
 PRIVATE_KEY_PATH = os.environ.get("AWS_PRIVATE_KEY", "./private.pem.key")
@@ -44,7 +45,7 @@ def logging_monitor():
         with message_lock:
             if message_count > 0:
                 logger.info(
-                    f"Health Check: Pushed {message_count} messages to Redis in the last {time_elapsed:.1f} seconds. payload handled per second (MB): {(message_length/1024/1024)/time_elapsed:.2f} MB/s"
+                    f"Health Check: Pushed {message_count} messages to Redis in the last {time_elapsed:.1f} seconds. payload handled per second: {humanize.naturalsize((message_length)/time_elapsed)}/s"
                 )
                 # Reset the counters
                 message_count = 0
