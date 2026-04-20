@@ -67,7 +67,10 @@ def process_data(data_points, doppler):
 
     # PROCESS IT BABY!!!
 
-    dfft_dbfs = linear_to_dB(doppler.compute_doppler_map(data_points, 0))
+    # Cast to a numpy array and reshape to (num_chirps_per_frame, num_samples)
+    data_2d = np.array(data_points).reshape(32, 64)
+
+    dfft_dbfs = linear_to_dB(doppler.compute_doppler_map(data_2d, 0))
     all_frame_dB_values = dfft_dbfs.flatten()
 
     if len(all_frame_dB_values) >= 10:
