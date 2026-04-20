@@ -96,10 +96,6 @@ def redis_firestore_batch_worker(
                 continue  # Timeout occurred, loop back and check shutdown_flag
             _, data = result
 
-            logger.info(
-                f"Popped first item from '{redis_name}'. Waiting up to {wait_time}s to collect a batch (max {batch_size} items)..."
-            )
-
             # Start a list of RAW strings
             raw_items = [data]
 
@@ -127,8 +123,6 @@ def redis_firestore_batch_worker(
                     item for item in additional_items if item is not None
                 ]
                 raw_items.extend(valid_additional_items)
-
-            logger.info(f"Collected total of {len(raw_items)} items for this batch.")
 
             # 4. Process the entire batch in one loop
             batch = []

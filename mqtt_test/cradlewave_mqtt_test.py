@@ -8,6 +8,7 @@ import orjson as json  # type: ignore
 
 from awscrt import mqtt  # type: ignore
 from awsiot import mqtt_connection_builder  # type: ignore
+import argparse
 
 
 # Configuration
@@ -33,6 +34,15 @@ def generate_payload_json(data):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Send test messages to AWS IoT")
+    parser.add_argument(
+        "--test-data",
+        type=str,
+        default=None,
+        help="Path to CSV file containing test data array. If not provided, random data will be generated.",
+    )
+    args = parser.parse_args()
+
     print("Configuring AWS IoT connection...")
     mqtt_connection = mqtt_connection_builder.mtls_from_path(
         endpoint=AWS_ENDPOINT,
@@ -49,9 +59,21 @@ if __name__ == "__main__":
     connect_future.result()
     print("✅ Connected!")
 
+    if args.test_data:
+        print(f"Loading test data from {args.test_data}...")
+        frames = []
+        with open(args.test_data, "r") as f:
+            for line in f:
+                if line.strip():
+                    frames.append([float(val) for val in line.strip().split(",")])
+        print(f"Loaded {len(frames)} frames. Frame length: {len(frames[0])} floats.")
+        samples = len(frames)
+
     # Generate static data once (as in original script)
-    data = [round(random.uniform(0.0, 100.0), 5) for _ in range(2048)]
-    samples = 1000
+    else:
+        single_frame = [round(random.uniform(0.0, 100.0), 5) for _ in range(2048)]
+        frames = [single_frame] * 1000
+        samples = 1000
 
     # Use a Semaphore to manage in-flight messages (Sliding Window)
     # This maximizes throughput while capping memory/network usage
@@ -69,7 +91,7 @@ if __name__ == "__main__":
         # Wait for an open slot in our sliding window
         throttle_semaphore.acquire()
 
-        payload_bytes = generate_payload_json(data)
+        payload_bytes = generate_payload_json(frames[i])
 
         publish_future, packet_id = mqtt_connection.publish(
             topic=TOPIC,
@@ -92,7 +114,7 @@ if __name__ == "__main__":
     mqtt_connection.disconnect().result()
 
     # Metrics
-    sample_payload_len = len(generate_payload_json(data))
+    sample_payload_len = len(generate_payload_json(frames[0]))
     print(f"Total time taken: {total_time:.2f} seconds")
     print(
         f"Sent {samples} frames in {total_time:.2f} seconds ({samples/total_time:.2f} frames/sec)"
