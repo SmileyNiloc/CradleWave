@@ -416,9 +416,12 @@ async def main():
             frame_data = frame_contents[0]
             # print(f"frame contents {frame_data} \n")
 
+            # LOOK HERE FOR DOPPLER TRANS
+
             all_frame_dB_values = []
             for i_ant in range(num_rx_antennas):
                 mat = frame_data[i_ant, :, :]
+
                 dfft_dbfs = linear_to_dB(doppler.compute_doppler_map(mat, i_ant))
                 all_frame_dB_values.extend(dfft_dbfs.flatten())
 
