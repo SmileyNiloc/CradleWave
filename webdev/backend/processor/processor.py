@@ -12,7 +12,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def logging_monitor(shutdown_flag, log_lock, process_data_count, process_data_length):
+def logging_monitor(
+    shutdown_flag,
+    log_lock,
+    process_data_count,
+    process_data_length,
+    frames_processed_count,
+    processed_data_pushed_count,
+):
     """Runs in the background and wakes every 5 seconds to log the current throughput."""
 
     last_log_time = time.time()
@@ -26,7 +33,12 @@ def logging_monitor(shutdown_flag, log_lock, process_data_count, process_data_le
         time_elapsed = current_time - last_log_time
 
         with log_lock:
-            if process_data_count.value > 0:
+            # Check if any part of the pipeline had activity
+            if (
+                process_data_count.value > 0
+                or frames_processed_count.value > 0
+                or processed_data_pushed_count.value > 0
+            ):
                 # Calculate MB/s, guarding against division by zero
                 bytes_per_sec = (
                     (process_data_length.value) / time_elapsed
@@ -35,13 +47,17 @@ def logging_monitor(shutdown_flag, log_lock, process_data_count, process_data_le
                 )
 
                 logger.info(
-                    f"Health Check: Pushed {process_data_count.value} messages to Redis in the last {time_elapsed:.1f} seconds. "
-                    f"Payload handled: {humanize.naturalsize(bytes_per_sec)}/ss"
+                    f"Throughput ({time_elapsed:.1f}s): "
+                    f"Ingested {process_data_count.value} msgs ({humanize.naturalsize(bytes_per_sec)}/s) | "
+                    f"Processed {frames_processed_count.value} queued frames | "
+                    f"Pushed {processed_data_pushed_count.value} outputs to Redis out-queue."
                 )
 
                 # Reset the counters
                 process_data_count.value = 0
                 process_data_length.value = 0
+                frames_processed_count.value = 0
+                processed_data_pushed_count.value = 0
                 health_check_idle_count = 0
             elif health_check_idle_count < 3:  # Limit idle logs to avoid spamming
                 # OPTIONAL FIX: Give a heartbeat even when idle so you know the thread is alive
@@ -137,6 +153,9 @@ def signal_processor(
     redis_port,
     raw_signal_queue,
     shutdown_flag,
+    log_lock,
+    frames_processed_count,
+    processed_data_pushed_count,
 ):
     """Consumes processed signal data from the queue, does further processing if needed, and then pushes results back to Redis."""
     # Connect to Redis
@@ -158,6 +177,10 @@ def signal_processor(
     while not shutdown_flag.is_set():
         try:
             data = raw_signal_queue.get(timeout=1)  # Wait for data with timeout
+
+            with log_lock:
+                frames_processed_count.value += 1
+
             # Manually shift the raw_signal_np and append the new data to the end
             raw_signal_np[:-1] = raw_signal_np[1:]  # Shift left by one
             raw_signal_np[-1] = data["data"]  # Append new data at the end
@@ -171,6 +194,9 @@ def signal_processor(
             r.lpush(
                 "processed_data", json.dumps(export)
             )  # Push the processed result back to Redis
+
+            with log_lock:
+                processed_data_pushed_count.value += 1
 
             logger.debug(f"Pushed processed data to Redis 'processed_data': {export}")
 
@@ -201,6 +227,10 @@ if __name__ == "__main__":
     process_data_count = multiprocessing.Value("i", 0)
     process_data_length = multiprocessing.Value("i", 0)
 
+    # New metrics for the signal_processor stage
+    frames_processed_count = multiprocessing.Value("i", 0)
+    processed_data_pushed_count = multiprocessing.Value("i", 0)
+
     # Implement a queue for handling data between threads
     raw_signal_queue = multiprocessing.Queue()
 
@@ -212,6 +242,8 @@ if __name__ == "__main__":
             log_lock,
             process_data_count,
             process_data_length,
+            frames_processed_count,
+            processed_data_pushed_count,
         ),
         daemon=True,
     )
@@ -241,6 +273,9 @@ if __name__ == "__main__":
             redis_port,
             raw_signal_queue,
             shutdown_flag,
+            log_lock,
+            frames_processed_count,
+            processed_data_pushed_count,
         ),
         daemon=True,
     )
