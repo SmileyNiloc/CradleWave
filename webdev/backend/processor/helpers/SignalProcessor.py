@@ -1,4 +1,5 @@
 from scipy.signal import butter, lfilter, find_peaks
+from scipy import signal
 import numpy as np
 
 
