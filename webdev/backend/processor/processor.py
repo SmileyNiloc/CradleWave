@@ -187,7 +187,7 @@ def signal_processor(
             result = processor.process_signal_pipeline(raw_signal_np)
             export = {
                 "timestamp": data["timestamp"],
-                "heart_rate": result["heart_rate"],
+                "heart_rate": result["heart_rate_bpm"],
                 "breathing_rate": result["breathing_rate"],
             }
 
