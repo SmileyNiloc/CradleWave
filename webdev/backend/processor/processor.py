@@ -152,6 +152,8 @@ def signal_processor(
         150
     )  # Initialize an empty array to hold the raw signal data
 
+    logger.info("Signal processor started. Waiting for raw signal queue items...")
+
     # Take data from the queue and do further processing if needed.
     while not shutdown_flag.is_set():
         try:
@@ -169,6 +171,8 @@ def signal_processor(
             r.lpush(
                 "processed_data", json.dumps(export)
             )  # Push the processed result back to Redis
+
+            logger.debug(f"Pushed processed data to Redis 'processed_data': {export}")
 
         except queue.Empty:
             time.sleep(1)  # No data, just wait a bit and check shutdown_flag again
