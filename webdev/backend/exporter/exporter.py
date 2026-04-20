@@ -67,13 +67,24 @@ from datetime import datetime
 
 
 def redis_firestore_batch_worker(
-    redis_conn, device, collection, redis_name, batch_size=100, wait_time=2.0
+    redis_host,
+    redis_port,
+    device,
+    collection,
+    redis_name,
+    batch_size=100,
+    wait_time=2.0,
 ):
     """
     Continuously listens to the Redis list. When an item arrives, it waits
     a couple of seconds to allow the queue to build up, then flushes out of
     Redis in bulk.
     """
+
+    # Connect to Redis once. The redis-py client will automatically try to
+    # reconnect under the hood if the connection is temporarily lost.
+    redis_conn = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+
     while not shutdown_flag.is_set():
         try:
             # 1. Block until at least one item is available
@@ -137,8 +148,11 @@ def redis_firestore_batch_worker(
                     if raw_items:
                         redis_conn.lpush(redis_name, *raw_items)
 
+        except redis.ConnectionError as e:
+            logger.warning(f"Redis connection error in batch consumer. Retrying... {e}")
+            time.sleep(2)  # Wait before trying again
         except Exception as e:
-            logger.error(f"Error in batch consumer: {e}")
+            logger.error(f"Error in batch consumer: {e}", exc_info=True)
             time.sleep(1)  # Back off on error
 
 
@@ -146,44 +160,27 @@ if __name__ == "__main__":
     redis_host = os.environ.get("REDIS_HOST", "127.0.0.1")
     redis_port = 6379
 
-    print(f"Connecting to Redis on {redis_host}:{redis_port}...")
-    while True:
-        try:
-            redis_conn = redis.Redis(
-                host=redis_host, port=redis_port, decode_responses=True
-            )
-            redis_conn.ping()
-            print("Successfully connected to Redis.")
-            break
-        except redis.ConnectionError as e:
-            logger.warning(f"Waiting for Redis to start... {e}")
-            time.sleep(2)
-
     redis_firestore_worker = threading.Thread(
         target=redis_firestore_batch_worker,
-        args=(redis_conn, "demo_pcb", "filtered_data", "processed_data", 250, 5.0),
+        args=(
+            redis_host,
+            redis_port,
+            "demo_pcb",
+            "filtered_data",
+            "processed_data",
+            250,
+            5.0,
+        ),
         daemon=True,
     )
     redis_firestore_worker.start()
+
     try:
-        while True:
+        # Loop to keep main thread alive until shutdown flag is flipped
+        while not shutdown_flag.is_set():
             time.sleep(1)
     except KeyboardInterrupt:
-        logger.info("Shutting down workers...")
+        logger.info("Shutdown signal received (Ctrl+C). Terminating gracefully...")
         shutdown_flag.set()
-        redis_firestore_worker.join()  # Waits for the thread to exit cleanly
+        redis_firestore_worker.join(timeout=5)  # Wait for the thread to exit cleanly
         logger.info("Worker shutdown complete.")
-    except redis.ConnectionError as e:
-        logger.warning(f"Redis connection error: {e}")
-        time.sleep(2)
-        while True:
-            try:
-                redis_conn = redis.Redis(
-                    host=redis_host, port=redis_port, decode_responses=True
-                )
-                redis_conn.ping()
-                print("Successfully connected to Redis.")
-                break
-            except redis.ConnectionError as e:
-                logger.warning(f"Retrying Redis connection: {e}")
-                time.sleep(2)
