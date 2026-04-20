@@ -84,6 +84,9 @@ def redis_firestore_batch_worker(
     # Connect to Redis once. The redis-py client will automatically try to
     # reconnect under the hood if the connection is temporarily lost.
     redis_conn = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
+    logger.info(
+        f"Worker initialized. Listening to Redis queue '{redis_name}' for device '{device}'..."
+    )
 
     while not shutdown_flag.is_set():
         try:
@@ -92,6 +95,10 @@ def redis_firestore_batch_worker(
             if not result:
                 continue  # Timeout occurred, loop back and check shutdown_flag
             _, data = result
+
+            logger.info(
+                f"Popped first item from '{redis_name}'. Waiting up to {wait_time}s to collect a batch (max {batch_size} items)..."
+            )
 
             # Start a list of RAW strings
             raw_items = [data]
@@ -120,6 +127,8 @@ def redis_firestore_batch_worker(
                     item for item in additional_items if item is not None
                 ]
                 raw_items.extend(valid_additional_items)
+
+            logger.info(f"Collected total of {len(raw_items)} items for this batch.")
 
             # 4. Process the entire batch in one loop
             batch = []
@@ -159,6 +168,10 @@ def redis_firestore_batch_worker(
 if __name__ == "__main__":
     redis_host = os.environ.get("REDIS_HOST", "127.0.0.1")
     redis_port = 6379
+
+    logger.info(
+        f"Starting exporter. Connecting to Redis on {redis_host}:{redis_port}..."
+    )
 
     redis_firestore_worker = threading.Thread(
         target=redis_firestore_batch_worker,
