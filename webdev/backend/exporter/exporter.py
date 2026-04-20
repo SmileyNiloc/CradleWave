@@ -143,10 +143,21 @@ def redis_firestore_batch_worker(
 
 
 if __name__ == "__main__":
-    # Setup Redis Connection
-    redis_conn = None
     redis_host = os.environ.get("REDIS_HOST", "127.0.0.1")
-    redis_conn = redis.Redis(host=redis_host, port=6379, decode_responses=True)
+    redis_port = 6379
+
+    print(f"Connecting to Redis on {redis_host}:{redis_port}...")
+    while True:
+        try:
+            redis_conn = redis.Redis(
+                host=redis_host, port=redis_port, decode_responses=True
+            )
+            redis_conn.ping()
+            print("Successfully connected to Redis.")
+            break
+        except redis.ConnectionError as e:
+            logger.warning(f"Waiting for Redis to start... {e}")
+            time.sleep(2)
 
     redis_firestore_worker = threading.Thread(
         target=redis_firestore_batch_worker,
@@ -162,3 +173,17 @@ if __name__ == "__main__":
         shutdown_flag.set()
         redis_firestore_worker.join()  # Waits for the thread to exit cleanly
         logger.info("Worker shutdown complete.")
+    except redis.ConnectionError as e:
+        logger.warning(f"Redis connection error: {e}")
+        time.sleep(2)
+        while True:
+            try:
+                redis_conn = redis.Redis(
+                    host=redis_host, port=redis_port, decode_responses=True
+                )
+                redis_conn.ping()
+                print("Successfully connected to Redis.")
+                break
+            except redis.ConnectionError as e:
+                logger.warning(f"Retrying Redis connection: {e}")
+                time.sleep(2)
