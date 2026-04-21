@@ -60,11 +60,11 @@ watch(
       return;
     }
 
-    // Always fetch the 2 most recent documents for this device
+    // Fetch only the most recent document for this device (1 hour of data)
     recentDocsRef.value = query(
       collection(db, "devices", newDeviceId, "filtered_data"),
       orderBy(documentId(), "desc"),
-      limit(2)
+      limit(1)
     );
   },
   { immediate: true }
@@ -73,36 +73,17 @@ watch(
 const graphData = computed(() => {
   if (!recentDocs.value || recentDocs.value.length === 0) return [];
 
-  let maxTime = 0;
-  recentDocs.value.forEach((docGroup) => {
-    if (docGroup.data_points) {
-      docGroup.data_points.forEach((dp) => {
-        if (dp.timestamp && dp.timestamp.toDate) {
-          const time = dp.timestamp.toDate().getTime();
-          if (time > maxTime) maxTime = time;
-        }
-      });
-    }
-  });
-
-  if (maxTime === 0) return [];
-
-  // Create exactly 1 hour window counting back from the latest available timestamp
-  const cutoff = maxTime - 3600000;
-
   const points = [];
-  recentDocs.value.forEach((docGroup) => {
-    if (docGroup.data_points) {
-      docGroup.data_points.forEach((dp) => {
-        if (dp.timestamp && dp.timestamp.toDate) {
-          const time = dp.timestamp.toDate().getTime();
-          if (time >= cutoff && time <= maxTime) {
-            points.push([time, dp.breathing_rate]);
-          }
-        }
-      });
-    }
-  });
+  const latestDoc = recentDocs.value[0];
+
+  if (latestDoc.data_points) {
+    latestDoc.data_points.forEach((dp) => {
+      if (dp.timestamp && dp.timestamp.toDate) {
+        const time = dp.timestamp.toDate().getTime();
+        points.push([time, dp.breathing_rate]);
+      }
+    });
+  }
 
   points.sort((a, b) => a[0] - b[0]);
   return points;
@@ -110,8 +91,6 @@ const graphData = computed(() => {
 
 const chartOption = computed(() => {
   const points = graphData.value;
-  const maxTime = points.length > 0 ? points[points.length - 1][0] : Date.now();
-  const minTime = maxTime - 3600000;
 
   return {
     title: {
@@ -150,8 +129,6 @@ const chartOption = computed(() => {
     },
     xAxis: {
       type: "time",
-      min: minTime,
-      max: maxTime,
       boundaryGap: false,
       axisLine: { lineStyle: { color: "#666" } },
       axisLabel: {
