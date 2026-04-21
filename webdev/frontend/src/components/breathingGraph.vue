@@ -1,28 +1,29 @@
 <template>
-  <div v-if="selectedSession.sessionId != null" class="graph-container">
+  <div v-if="selectedSession.deviceId != null" class="graph-container">
     <div class="graph-wrapper">
       <v-chart :option="chartOption" autoresize class="chart" />
-      <div
-        v-if="breathingRateData.collection.length === 0"
-        class="no-data-overlay"
-      >
+      <div v-if="graphData.length === 0" class="no-data-overlay">
         <p>No data available in this collection</p>
       </div>
     </div>
   </div>
   <div v-else class="empty-state">
-    <div class="empty-icon">🫁</div>
-    <h3>No Session Selected</h3>
-    <p>
-      Select a device and session from the sidebar to view breathing rate data
-    </p>
+    <div class="empty-icon">📊</div>
+    <h3>No Device Selected</h3>
+    <p>Select a device from the sidebar to view breathing rate data</p>
   </div>
 </template>
 
 <script setup>
-import { computed, inject, watch, reactive } from "vue";
+import { computed, inject, watch, ref } from "vue";
 import { useCollection } from "vuefire";
-import { collection, query, orderBy } from "firebase/firestore";
+import {
+  collection,
+  query,
+  orderBy,
+  limit,
+  documentId
+} from "firebase/firestore";
 import { db } from "../utils/firebase.js";
 import VChart from "vue-echarts";
 import * as echarts from "echarts/core";
@@ -32,193 +33,173 @@ import {
   TooltipComponent,
   TitleComponent,
   LegendComponent,
+  DataZoomComponent
 } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 
-// Register ECharts components globally
 echarts.use([
   LineChart,
   GridComponent,
   TooltipComponent,
   TitleComponent,
   LegendComponent,
-  CanvasRenderer,
+  DataZoomComponent,
+  CanvasRenderer
 ]);
 
-// Register component locally
 const selectedSession = inject("selectedSession");
 
-let breathingRateData = reactive({
-  collection: useCollection(),
-});
+const recentDocsRef = ref(null);
+const recentDocs = useCollection(recentDocsRef);
 
-// Watch Firestore for updates
 watch(
-  () => selectedSession,
-  (newVal) => {
-    console.log("Selected session changed:", newVal);
-    if (!newVal || !newVal.sessionId) {
-      console.log("Missing required fields for data fetch");
+  () => selectedSession.deviceId,
+  (newDeviceId) => {
+    if (!newDeviceId) {
+      recentDocsRef.value = null;
       return;
     }
 
-    console.log(
-      `Fetching data from: devices/${newVal.deviceId}/sessions/${newVal.sessionId}/breathing_rate_data`
+    // Always fetch the 2 most recent documents for this device
+    recentDocsRef.value = query(
+      collection(db, "devices", newDeviceId, "filtered_data"),
+      orderBy(documentId(), "desc"),
+      limit(2)
     );
-    const readingsRef = collection(
-      db,
-      "devices",
-      newVal.deviceId,
-      "sessions",
-      newVal.sessionId,
-      "breathing_rate_data"
-    );
-    const q = query(readingsRef, orderBy("time"));
-    breathingRateData.collection = useCollection(q);
   },
-  { deep: true, immediate: true }
+  { immediate: true }
 );
 
-// Computed ECharts option
-const chartOption = computed(() => ({
-  title: {
-    text: "Real-Time Breathing Rate Monitor",
-    left: "center",
-    textStyle: {
-      color: "#333",
-      fontSize: 18,
-      fontWeight: "bold",
+const graphData = computed(() => {
+  if (!recentDocs.value || recentDocs.value.length === 0) return [];
+
+  let maxTime = 0;
+  recentDocs.value.forEach((docGroup) => {
+    if (docGroup.data_points) {
+      docGroup.data_points.forEach((dp) => {
+        if (dp.timestamp && dp.timestamp.toDate) {
+          const time = dp.timestamp.toDate().getTime();
+          if (time > maxTime) maxTime = time;
+        }
+      });
+    }
+  });
+
+  if (maxTime === 0) return [];
+
+  // Create exactly 1 hour window counting back from the latest available timestamp
+  const cutoff = maxTime - 3600000;
+
+  const points = [];
+  recentDocs.value.forEach((docGroup) => {
+    if (docGroup.data_points) {
+      docGroup.data_points.forEach((dp) => {
+        if (dp.timestamp && dp.timestamp.toDate) {
+          const time = dp.timestamp.toDate().getTime();
+          if (time >= cutoff && time <= maxTime) {
+            points.push([time, dp.breathing_rate]);
+          }
+        }
+      });
+    }
+  });
+
+  points.sort((a, b) => a[0] - b[0]);
+  return points;
+});
+
+const chartOption = computed(() => {
+  const points = graphData.value;
+  const maxTime = points.length > 0 ? points[points.length - 1][0] : Date.now();
+  const minTime = maxTime - 3600000;
+
+  return {
+    title: {
+      text: "Real-Time Breathing Monitor",
+      left: "center",
+      textStyle: { color: "#333", fontSize: 18, fontWeight: "bold" }
     },
-  },
-  tooltip: {
-    trigger: "axis",
-    backgroundColor: "rgba(50, 50, 50, 0.9)",
-    borderColor: "#3498db",
-    borderWidth: 1,
-    textStyle: {
-      color: "#fff",
+    tooltip: {
+      trigger: "axis",
+      backgroundColor: "rgba(50, 50, 50, 0.9)",
+      borderColor: "#3498db",
+      borderWidth: 1,
+      textStyle: { color: "#fff" },
+      formatter: (params) => {
+        if (!params || params.length === 0) return "";
+        const point = params[0];
+        const timeStr = new Date(point.value[0]).toLocaleTimeString();
+        const val =
+          point.value[1] !== undefined && point.value[1] !== null
+            ? Number(point.value[1]).toFixed(0)
+            : "N/A";
+        return `
+          <div style="padding: 5px;">
+            <strong>Time:</strong> ${timeStr}<br/>
+            <strong style="color: #3498db;">Breathing Rate:</strong> ${val} BPM
+          </div>
+        `;
+      }
     },
-    formatter: (params) => {
-      if (!params || params.length === 0) return "";
-      const point = params[0];
-      return `
-        <div style="padding: 5px;">
-          <strong>Time:</strong> ${point.axisValue}s<br/>
-          <strong style="color: #3498db;">Breathing Rate:</strong> ${point.value} BPM
-        </div>
-      `;
+    grid: {
+      left: "3%",
+      right: "4%",
+      bottom: "10%",
+      top: "15%",
+      containLabel: true
     },
-  },
-  grid: {
-    left: "3%",
-    right: "4%",
-    bottom: "10%",
-    top: "15%",
-    containLabel: true,
-  },
-  xAxis: {
-    type: "category",
-    data: breathingRateData.collection.map((d) =>
-      Number(d.relative_time).toFixed(2)
-    ),
-    boundaryGap: false,
-    min: (v) => v.max - 10,
-    max: "dataMax",
-    axisLine: {
-      lineStyle: {
+    xAxis: {
+      type: "time",
+      min: minTime,
+      max: maxTime,
+      boundaryGap: false,
+      axisLine: { lineStyle: { color: "#666" } },
+      axisLabel: {
         color: "#666",
+        fontSize: 11,
+        rotate: 45,
+        formatter: (value) => new Date(value).toLocaleTimeString()
       },
+      splitLine: { show: true, lineStyle: { color: "#e0e0e0", type: "dashed" } }
     },
-    axisLabel: {
-      color: "#666",
-      fontSize: 11,
-      rotate: 45,
+    yAxis: {
+      type: "value",
+      name: "BPM",
+      nameTextStyle: { color: "#666", fontSize: 12, padding: [0, 0, 0, 10] },
+      scale: true,
+      axisLine: { lineStyle: { color: "#666" } },
+      axisLabel: { color: "#666", fontSize: 11 },
+      splitLine: { lineStyle: { color: "#e0e0e0", type: "dashed" } }
     },
-    splitLine: {
-      show: true,
-      lineStyle: {
-        color: "#e0e0e0",
-        type: "dashed",
-      },
-    },
-  },
-  yAxis: {
-    type: "value",
-    name: "Breaths/min",
-    nameTextStyle: {
-      color: "#666",
-      fontSize: 12,
-      padding: [0, 0, 0, 10],
-    },
-    scale: true,
-    axisLine: {
-      lineStyle: {
-        color: "#666",
-      },
-    },
-    axisLabel: {
-      color: "#666",
-      fontSize: 11,
-    },
-    splitLine: {
-      lineStyle: {
-        color: "#e0e0e0",
-        type: "dashed",
-      },
-    },
-  },
-  series: [
-    {
-      name: "Breathing Rate",
-      type: "line",
-      smooth: true,
-      data: breathingRateData.collection.map((d) => d.breathing_rate),
-      showSymbol: false,
-      symbolSize: 6,
-      symbol: "circle",
-      sampling: "lttb",
-      lineStyle: {
-        color: "#3498db",
-        width: 3,
-        shadowColor: "rgba(52, 152, 219, 0.4)",
-        shadowBlur: 10,
-      },
-      areaStyle: {
-        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          {
-            offset: 0,
-            color: "rgba(52, 152, 219, 0.3)",
-          },
-          {
-            offset: 1,
-            color: "rgba(52, 152, 219, 0.05)",
-          },
-        ]),
-      },
-      emphasis: {
-        focus: "series",
+    series: [
+      {
+        name: "Breathing Rate",
+        type: "line",
+        smooth: true,
+        data: points,
+        showSymbol: false,
+        symbolSize: 6,
+        symbol: "circle",
+        sampling: "lttb",
         lineStyle: {
-          width: 4,
+          color: "#3498db",
+          width: 3,
+          shadowColor: "rgba(52, 152, 219, 0.4)",
+          shadowBlur: 10
         },
-      },
-      animation: true,
-      animationDuration: 300,
-      animationEasing: "linear",
-    },
-  ],
-  dataZoom: [
-    {
-      type: "slider",
-      bottom: 0,
-      height: 20,
-    },
-    {
-      type: "inside",
-    },
-  ],
-  animationDuration: 300,
-  animationEasing: "linear",
-}));
+        areaStyle: {
+          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+            { offset: 0, color: "rgba(52, 152, 219, 0.3)" },
+            { offset: 1, color: "rgba(52, 152, 219, 0.05)" }
+          ])
+        },
+        emphasis: { focus: "series", lineStyle: { width: 4 } },
+        animation: false
+      }
+    ],
+    dataZoom: [{ type: "slider", bottom: 0, height: 20 }, { type: "inside" }]
+  };
+});
 </script>
 
 <style scoped>

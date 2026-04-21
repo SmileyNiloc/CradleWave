@@ -22,23 +22,41 @@ CradleWave is a minimally intrusive baby monitoring system using **60 GHz FMCW r
 
 ## System Architecture
 
-```
-┌─────────────────┐     WebSocket      ┌─────────────────┐
-│  Raspberry Pi   │ ─────────────────► │  Cloud Backend  │
-│  + Radar Board  │     (msgpack)      │   (FastAPI)     │
-└─────────────────┘                    └────────┬────────┘
-                                                │
-                                                ▼
-                                       ┌─────────────────┐
-                                       │    Firestore    │
-                                       │    Database     │
-                                       └────────┬────────┘
-                                                │
-                                                ▼
-                                       ┌─────────────────┐
-                                       │   Vue.js Web    │
-                                       │    Dashboard    │
-                                       └─────────────────┘
+```mermaid
+flowchart TD
+    %% Clinical Calm Theme - Green Dominant
+    classDef default fill:#CEE4C7,stroke:#FFFFFF,stroke-width:3px,color:#334155
+    classDef storage fill:#F8F9F5,stroke:#CEE4C7,stroke-width:3px,color:#334155
+
+    %% Style the connecting arrows to match the theme
+    linkStyle default stroke:#A8CBA0,stroke-width:2px,color:#334155
+
+    A["`**ESP32 Radar**
+    Hardware sensor node collecting raw data`"] -->|Publish MQTT Message| B["`**AWS IoT Core MQTT**
+    Managed cloud broker receiving data`"]
+
+    B -->|Subscribed to MQTT topic| C("`**Ingestor Node**
+    Retrieves and buffers incoming payloads`")
+
+    C -->|Queued Frames| R("`**Redis**
+    In-Memory Storage Container`")
+
+    R -->|Queued Frames| D("`**Processor Node**
+    Runs Signal Processing to find vitals signs`")
+
+    D -->|Vital Signs| R
+
+    R -->|Vitals Signs| E("`**Exporter Node**
+    Formats output for database ingestion`")
+
+    E -->|Write/Update| F[("`**Firestore Database**
+    NoSQL document store for vital signs data`")]
+
+    F -->|Real-Time Sync| G["`**Vue.js Web Dashboard**
+    Frontend UI displaying live analytics`"]
+
+    %% Apply storage theme to databases
+    class R,F storage
 ```
 
 ## Project Structure
@@ -181,7 +199,3 @@ This project is developed as part of the University of Delaware Electrical and C
 3. Welch's Method for Power Spectral Density Estimation
 
 ---
-
-<p align="center">
-  <strong>CradleWave</strong> - Keeping watch, contactlessly. 👶💤
-</p>
