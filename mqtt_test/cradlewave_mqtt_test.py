@@ -41,6 +41,13 @@ if __name__ == "__main__":
         default=None,
         help="Path to CSV file containing test data array. If not provided, random data will be generated.",
     )
+    parser.add_argument(
+        "-r",
+        "--repeat",
+        type=int,
+        default=1,
+        help="If set, will repeat sending the frames a set number of times (useful for stress testing).",
+    )
     args = parser.parse_args()
 
     print("Configuring AWS IoT connection...")
@@ -87,11 +94,11 @@ if __name__ == "__main__":
     print("Starting transmission...")
     start_timestamp = time.time()  # Start timing HERE, after connection
 
-    for i in tqdm(range(samples), desc="Sending to AWS", unit="msg"):
+    for i in tqdm(range(samples * args.repeat), desc="Sending to AWS", unit="msg"):
         # Wait for an open slot in our sliding window
         throttle_semaphore.acquire()
 
-        payload_bytes = generate_payload_json(frames[i])
+        payload_bytes = generate_payload_json(frames[i % len(frames)])
 
         publish_future, packet_id = mqtt_connection.publish(
             topic=TOPIC,
@@ -117,9 +124,9 @@ if __name__ == "__main__":
     sample_payload_len = len(generate_payload_json(frames[0]))
     print(f"Total time taken: {total_time:.2f} seconds")
     print(
-        f"Sent {samples} frames in {total_time:.2f} seconds ({samples/total_time:.2f} frames/sec)"
+        f"Sent {samples * args.repeat} frames in {total_time:.2f} seconds ({(samples * args.repeat)/total_time:.2f} frames/sec)"
     )
-    print(f"Average time per frame: {total_time/samples:.4f} seconds")
+    print(f"Average time per frame: {total_time/(samples * args.repeat):.4f} seconds")
     print(f"Average payload size: {sample_payload_len} bytes")
     print(
         f"Average MB per second: {(sample_payload_len*samples)/total_time/1024/1024:.2f} MB/sec"
