@@ -29,7 +29,7 @@ const app = createApp(App);
 // Setup VueFire
 app.use(VueFire, {
   firebaseApp,
-  modules: [VueFireFirestoreOptionsAPI()],
+  modules: [VueFireFirestoreOptionsAPI()]
 });
 
 app.mount("#app");

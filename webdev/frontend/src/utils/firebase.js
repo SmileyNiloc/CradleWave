@@ -14,7 +14,7 @@ const firebaseConfig = {
   storageBucket: "cradlewave-aa74f.firebasestorage.app",
   messagingSenderId: "351958736605",
   appId: "1:351958736605:web:68fddf48fec7016654c534",
-  measurementId: "G-YWFVYM8NHD",
+  measurementId: "G-YWFVYM8NHD"
 };
 
 // Initialize Firebase
