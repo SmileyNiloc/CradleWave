@@ -188,9 +188,10 @@ def signal_processor(
             filtered_signal_np[:-1] = filtered_signal_np[1:]  # Shift left by one
             filtered_signal_np[-1] = clean_point  # Append new data at the end
             result = processor.process_signal_pipeline(filtered_signal_np)
+            bpm = processor.estimate_heart_rate_fft(filtered_signal_np)
             export = {
                 "timestamp": data["timestamp"],
-                "heart_rate": result["heart_rate_bpm"],
+                "heart_rate": bpm,
                 "breathing_rate": result["breathing_rate"],
             }
 
