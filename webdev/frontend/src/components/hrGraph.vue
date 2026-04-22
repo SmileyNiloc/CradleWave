@@ -189,7 +189,7 @@ const chartOption = computed(() => {
   border-radius: 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   padding: 1.5rem;
-  height: 500px;
+  height: 650px;
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;

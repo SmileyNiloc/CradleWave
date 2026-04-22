@@ -139,10 +139,10 @@ provide("selectedSession", selection);
 }
 
 .content-grid {
-  display: grid;
-  grid-template-columns: 300px 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 2rem;
-  align-items: start;
+  align-items: stretch;
 }
 
 .sidebar {
