@@ -166,10 +166,14 @@ def signal_processor(
         exit(1)
 
     processor = SignalProcessor(sample_rate=15)
-    # There should be 150 values within the raw signal buffer, which corresponds to 10 seconds of data at 15 fps
-    raw_signal_np = np.zeros(
-        150
-    )  # Initialize an empty array to hold the raw signal data
+
+    # 10 seconds of data at 15 fps = 150 values
+    buffer_size = 150
+    raw_signal_np = np.zeros(buffer_size)
+
+    # Trackers for cold start and inactivity flush
+    valid_samples = 0
+    last_frame_time = time.time()
 
     logger.info("Signal processor started. Waiting for raw signal queue items...")
 
@@ -178,30 +182,54 @@ def signal_processor(
         try:
             data = raw_signal_queue.get(timeout=1)  # Wait for data with timeout
 
+            # Update activity timer
+            last_frame_time = time.time()
+
             with log_lock:
                 frames_processed_count.value += 1
 
             # Manually shift the raw_signal_np and append the new data to the end
             raw_signal_np[:-1] = raw_signal_np[1:]  # Shift left by one
             raw_signal_np[-1] = data["data"]  # Append new data at the end
-            result = processor.process_signal_pipeline(raw_signal_np)
-            export = {
-                "timestamp": data["timestamp"],
-                "heart_rate": result["heart_rate_bpm"],
-                "breathing_rate": result["breathing_rate"],
-            }
 
-            r.lpush(
-                "processed_data", json.dumps(export)
-            )  # Push the processed result back to Redis
+            # Increment our valid sample counter (cap it at the buffer size)
+            if valid_samples < buffer_size:
+                valid_samples += 1
 
-            with log_lock:
-                processed_data_pushed_count.value += 1
+            # Only process and push to Redis if we have a fully saturated buffer
+            if valid_samples >= buffer_size:
+                result = processor.process_signal_pipeline(raw_signal_np)
+                export = {
+                    "timestamp": data["timestamp"],
+                    "heart_rate": result["heart_rate_bpm"],
+                    "breathing_rate": result["breathing_rate"],
+                }
 
-            logger.debug(f"Pushed processed data to Redis 'processed_data': {export}")
+                r.lpush(
+                    "processed_data", json.dumps(export)
+                )  # Push the processed result back to Redis
+
+                with log_lock:
+                    processed_data_pushed_count.value += 1
+
+                logger.debug(
+                    f"Pushed processed data to Redis 'processed_data': {export}"
+                )
+            else:
+                # Optional: Log the cold start progress
+                logger.debug(
+                    f"Buffering raw signal data... ({valid_samples}/{buffer_size})"
+                )
 
         except queue.Empty:
-            time.sleep(1)  # No data, just wait a bit and check shutdown_flag again
+            # If the queue is empty, check if we've been inactive for more than 5 seconds
+            # The 'valid_samples > 0' check ensures we only flush once per inactive period
+            if valid_samples > 0 and (time.time() - last_frame_time) > 5.0:
+                logger.info("No data received for 5 seconds. Flushing signal buffer.")
+                raw_signal_np = np.zeros(buffer_size)
+                valid_samples = 0
+
+            # Note: Removed time.sleep(1) here because queue.get(timeout=1) already provides a 1-second delay
             continue  # No data, loop back and check shutdown_flag
 
 
