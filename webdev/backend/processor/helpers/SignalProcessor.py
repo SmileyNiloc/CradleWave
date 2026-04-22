@@ -1,4 +1,4 @@
-from scipy.signal import butter, lfilter, find_peaks, lfilter_zi
+from scipy.signal import butter, lfilter, find_peaks
 from scipy import signal
 import numpy as np
 
@@ -19,21 +19,7 @@ class SignalProcessor:
         )
         self.kernel_heart = np.ones(5) / 5
         self.kernel_breath = np.ones(3) / 3
-        self.zi_hp_heart = (
-            lfilter_zi(self.hp_b_heart, self.hp_a_heart) * 0
-        )  # Initialize state
-        self.zi_hp_breath = (
-            lfilter_zi(self.hp_b_breath, self.hp_a_breath) * 0
-        )  # Initialize state
         # self.window_size = max(3, int(0.5 * self.sample_rate))
-
-    def filter_single_sample(self, new_sample):
-        # 1. Update filter state with the single new sample
-        hp_out, self.zi_hp_heart = signal.lfilter(
-            self.hp_b_heart, self.hp_a_heart, [new_sample], zi=self.zi_hp_heart
-        )
-        # 2. Return the filtered point
-        return hp_out[0]
 
     # 1
     def moving_target_indicator_heart(self, signal_data):

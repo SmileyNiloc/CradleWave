@@ -167,7 +167,7 @@ def signal_processor(
 
     processor = SignalProcessor(sample_rate=15)
     # There should be 150 values within the raw signal buffer, which corresponds to 10 seconds of data at 15 fps
-    filtered_signal_np = np.zeros(
+    raw_signal_np = np.zeros(
         150
     )  # Initialize an empty array to hold the raw signal data
 
@@ -181,17 +181,13 @@ def signal_processor(
             with log_lock:
                 frames_processed_count.value += 1
 
-            # Filter the point immediately, before the pipeline
-            clean_point = processor.filter_single_sample(data["data"])
-
             # Manually shift the raw_signal_np and append the new data to the end
-            filtered_signal_np[:-1] = filtered_signal_np[1:]  # Shift left by one
-            filtered_signal_np[-1] = clean_point  # Append new data at the end
-            result = processor.process_signal_pipeline(filtered_signal_np)
-            bpm = processor.estimate_heart_rate_fft(filtered_signal_np)
+            raw_signal_np[:-1] = raw_signal_np[1:]  # Shift left by one
+            raw_signal_np[-1] = data["data"]  # Append new data at the end
+            result = processor.process_signal_pipeline(raw_signal_np)
             export = {
                 "timestamp": data["timestamp"],
-                "heart_rate": bpm,
+                "heart_rate": result["heart_rate_bpm"],
                 "breathing_rate": result["breathing_rate"],
             }
 
