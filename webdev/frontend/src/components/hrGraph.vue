@@ -86,7 +86,7 @@ const graphData = computed(() => {
   }
 
   points.sort((a, b) => a[0] - b[0]);
-  
+
   // Filter to only show the last 5 minutes of data
   if (points.length > 0) {
     const latestTime = points[points.length - 1][0];
