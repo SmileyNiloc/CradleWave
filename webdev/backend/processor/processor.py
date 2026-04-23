@@ -84,7 +84,8 @@ def process_data(data_points, doppler):
     # PROCESS IT BABY!!!
 
     # Cast to a numpy array and reshape to (num_chirps_per_frame, num_samples)
-    data_2d = np.array(data_points).reshape(32, 64)
+    # Divide every value by 2048 as requested
+    data_2d = np.array(data_points).reshape(32, 64) / 2048.0
 
     dfft_dbfs = linear_to_dB(doppler.compute_doppler_map(data_2d, 0))
     all_frame_dB_values = dfft_dbfs.flatten()

@@ -3,7 +3,6 @@ services:
     image: redis:alpine
     ports:
       - "6379:6379"
-    restart: always
 
   processor:
     build:
@@ -13,4 +12,3 @@ services:
       - REDIS_HOST=redis
     depends_on:
       - redis
-    restart: always
