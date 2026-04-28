@@ -226,7 +226,7 @@ class SignalProcessor:
             bp_filtered_heart, window_size=5
         )
         filtered_breath = self.sliding_average_filter_breath(
-            bp_filtered_breath, window=3
+            bp_filtered_breath, window_size=3
         )
 
         # Step 4: Estimate heart rate -ATTENTION: BASED ON 20 SAMPLE PARTITION WITHIN SIGNAL_DATA, SEE ABOVE COMMENT

@@ -68,36 +68,40 @@ def logging_monitor(
             last_log_time = current_time
 
 
-# Linear to DB
-def linear_to_dB(x):
-    """Converts a linear value to decibels (dB).
-    Args:        x (float): The linear value to convert. Must be non-negative.
-    Returns:        float: The corresponding value in decibels (dB). Returns -inf for x=0.
-    Raises:        ValueError: If x is negative."""
-    # Change this to use small epsilom to avoid log(0)
-    return 20 * np.log10(abs(x) + 1e-10)  # avoids log(0)
+# ==============================
+# Doppler processing
+# ==============================
 
 
-# 2. Define the background worker function
-def process_data(data_points, doppler):
+# Input Raw Data Frame -> Output Doppler Map
+def doppler_map(frame):
+    # 2D Fast Fourier Transform
+    rd = np.fft.fft2(frame)
+    # Shift FFT to order negative -> positive frquencies, zero frequency centered
+    rd = np.fft.fftshift(rd, axes=0)
+    # Convert to dB
+    return 20 * np.log10(np.abs(rd) + 1e-10)
 
-    # PROCESS IT BABY!!!
 
-    # Cast to a numpy array and reshape to (num_chirps_per_frame, num_samples)
-    # Divide every value by 2048 as requested
-    data_2d = np.array(data_points).reshape(32, 64) / 2048.0
+# Input Doppler Raw Data Frame -> Output Scalar (Integration)
+def frame_to_scalar(frame):
+    # Compute Doppler Map of Raw Data Frame
+    rd_map = doppler_map(frame)
+    # Flatten 2D Doppler Map to 1D
+    frame1D = rd_map.flatten()
 
-    dfft_dbfs = linear_to_dB(doppler.compute_doppler_map(data_2d, 0))
-    all_frame_dB_values = dfft_dbfs.flatten()
-
-    if len(all_frame_dB_values) >= 10:
-        top_10_values = np.partition(all_frame_dB_values, -10)[-10:]
-        frame_peak_dB = np.mean(top_10_values)
+    # Should always be true (len = 2048), but prevents error
+    if len(frame1D) >= 15:
+        # Integration:
+        # Select 7 higest energy samples from frame
+        integratedFrame = np.partition(frame1D, -7)[-7:]
+        # Average 7 highest energy samples to 1 scalar
+        scalar = np.mean(integratedFrame)
     else:
-        frame_peak_dB = np.max(all_frame_dB_values)
+        # Extract highest sample
+        scalar = np.max(integratedFrame)
 
-    # So now we just have 1 peakDB from all that?
-    return frame_peak_dB * (-1)
+    return -scalar  # Invert sign - doppler values record negative
 
 
 def frame_processor(
@@ -116,15 +120,6 @@ def frame_processor(
         logger.critical(f"Could not connect to Redis on startup: {e}")
         exit(1)
 
-    # Define the doppler algorithm parameters
-    num_chirps = 32
-    num_samples = 64
-    num_antennas = 1
-
-    doppler = DopplerAlgo(
-        num_samples=num_samples, num_chirps_per_frame=num_chirps, num_ant=num_antennas
-    )
-
     while not shutdown_flag.is_set():
         try:
             # Use a small timeout instead of 0 (infinite) so the loop can check the
@@ -134,7 +129,7 @@ def frame_processor(
                 continue  # Timeout hit, loop back and check shutdown_flag
             queue_name, msg = redis_result
             msg_dict = json.loads(msg)
-            data = process_data(msg_dict.get("data", []), doppler)
+            data = frame_to_scalar(msg_dict.get("data", []))
             raw_signal_queue.put(
                 {"data": data, "timestamp": msg_dict.get("timestamp")}
             )  # Send data to the processing thread
