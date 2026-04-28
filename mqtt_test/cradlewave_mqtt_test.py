@@ -1,10 +1,8 @@
 import random
 import time
 import threading
+import struct
 from tqdm import tqdm  # type: ignore
-
-# Try to use orjson for massive throughput gains on float serialization
-import orjson as json  # type: ignore
 
 from awscrt import mqtt  # type: ignore
 from awsiot import mqtt_connection_builder  # type: ignore
@@ -22,15 +20,22 @@ CERTIFICATE_PATH = "caten_laptop.cert.pem"
 MAX_IN_FLIGHT = 50  # Keep exactly 50 messages on the wire at all times
 
 
-def generate_payload_json(data):
-    # Using orjson.dumps returns bytes, standard json.dumps returns str.
-    # awscrt accepts either for the payload.
-    ms_timestamp = time.time_ns() // 1_000_000
-    package = {"timestamp": ms_timestamp, "data": data}
+def generate_payload_bytes(data):
+    # Get current timestamp in milliseconds and fit it in an unsigned 32-bit int
+    ms_timestamp = int(time.time_ns() // 1_000_000) & 0xFFFFFFFF
 
-    if hasattr(json, "OPT_SERIALIZE_NUMPY"):  # quick check if using orjson
-        return json.dumps(package)
-    return json.dumps(package).encode("utf-8")
+    # Convert samples to integers, ensuring they fit in a 16-bit unsigned integer
+    # Handle floats by casting to int
+    samples = [int(val) for val in data][:2048]
+
+    # Pad to exactly 2048 samples if necessary
+    if len(samples) < 2048:
+        samples.extend([0] * (2048 - len(samples)))
+
+    # Pack the timestamp as a 32-bit unsigned int (<I) = 4 bytes
+    # Pack the 2048 samples as 16-bit unsigned ints (<2048H) = 4096 bytes
+    # Total = 4100 bytes
+    return struct.pack("<I2048H", ms_timestamp, *samples)
 
 
 if __name__ == "__main__":
@@ -46,7 +51,7 @@ if __name__ == "__main__":
         "--repeat",
         type=int,
         default=1,
-        help="If set, will repeat sending the frames a set number of times (useful for stress testing).",
+        help="If set, will repeat sending the frames a set number of times (useful for stress testing). If 0 will repeat forever",
     )
     args = parser.parse_args()
 
@@ -94,11 +99,32 @@ if __name__ == "__main__":
     print("Starting transmission...")
     start_timestamp = time.time()  # Start timing HERE, after connection
 
+    if args.repeat == 0:
+        print("Repeating indefinitely. Press Ctrl+C to stop.")
+        while True:
+            for i in tqdm(range(samples), desc="Sending to AWS", unit="msg"):
+                # Wait for an open slot in our sliding window
+                throttle_semaphore.acquire()
+
+                payload_bytes = generate_payload_bytes(frames[i % len(frames)])
+
+                publish_future, packet_id = mqtt_connection.publish(
+                    topic=TOPIC,
+                    payload=payload_bytes,
+                    qos=mqtt.QoS.AT_LEAST_ONCE,
+                )
+
+                # Attach non-blocking callback to release the semaphore slot
+                publish_future.add_done_callback(
+                    lambda future: throttle_semaphore.release()
+                )
+                in_flight_futures.append(publish_future)
+
     for i in tqdm(range(samples * args.repeat), desc="Sending to AWS", unit="msg"):
         # Wait for an open slot in our sliding window
         throttle_semaphore.acquire()
 
-        payload_bytes = generate_payload_json(frames[i % len(frames)])
+        payload_bytes = generate_payload_bytes(frames[i % len(frames)])
 
         publish_future, packet_id = mqtt_connection.publish(
             topic=TOPIC,
@@ -107,7 +133,7 @@ if __name__ == "__main__":
         )
 
         # Attach non-blocking callback to release the semaphore slot
-        publish_future.add_done_callback(on_publish_complete)
+        publish_future.add_done_callback(lambda future: throttle_semaphore.release())
         in_flight_futures.append(publish_future)
 
     # Wait for the very last batch to finish acknowledging
@@ -121,7 +147,7 @@ if __name__ == "__main__":
     mqtt_connection.disconnect().result()
 
     # Metrics
-    sample_payload_len = len(generate_payload_json(frames[0]))
+    sample_payload_len = len(generate_payload_bytes(frames[0]))
     print(f"Total time taken: {total_time:.2f} seconds")
     print(
         f"Sent {samples * args.repeat} frames in {total_time:.2f} seconds ({(samples * args.repeat)/total_time:.2f} frames/sec)"

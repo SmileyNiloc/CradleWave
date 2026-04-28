@@ -4,7 +4,7 @@ from collections import deque
 
 
 def arguement_parser():
-    parser = argparse.ArgumentParser(description="Send test messages to AWS IoT")
+    parser = argparse.ArgumentParser(description="Send test messages to Local Pipeline")
     parser.add_argument(
         "--test-data",
         type=str,
