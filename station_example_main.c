@@ -29,7 +29,7 @@
 
 // WiFi credentials
 #define EXAMPLE_ESP_WIFI_SSID "UD Devices" //"C:\\Malware\\TrojanHorse\\Virus.exe"
-#define EXAMPLE_ESP_WIFI_PASS "" //"River2018:)"
+#define EXAMPLE_ESP_WIFI_PASS "" 
 #define EXAMPLE_ESP_MAXIMUM_RETRY  CONFIG_ESP_MAXIMUM_RETRY
 
 // AWS IoT config

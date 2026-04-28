@@ -1,7 +1,10 @@
+import json
+
 from awsiot import mqtt_connection_builder  # type: ignore
 from awscrt import mqtt  # type: ignore
-import redis, os, queue, logging, time, threading
+import redis, os, queue, logging, time, threading, struct
 import humanize  # For better logging of data sizes
+import numpy as np
 
 ROOT_CA_PATH = os.environ.get("AWS_ROOT_CA", "./AmazonRootCA1.pem")
 PRIVATE_KEY_PATH = os.environ.get("AWS_PRIVATE_KEY", "./private.pem.key")
@@ -53,13 +56,29 @@ def logging_monitor():
                 last_log_time = current_time
 
 
+def unpack_cradlewave_numpy(payload_bytes):
+    if len(payload_bytes) != 4100:
+        raise ValueError(f"Expected 4100 bytes, got {len(payload_bytes)}")
+
+    # Unpack the timestamp using struct as before
+    timestamp_ms = struct.unpack("<I", payload_bytes[:4])[0]
+
+    # Unpack samples directly into a NumPy array
+    # '<u2' means Little-Endian, Unsigned 2-byte integer (uint16)
+    # offset=4 skips the first 4 bytes (the timestamp)
+    samples_array = np.frombuffer(payload_bytes, dtype=np.dtype("<u2"), offset=4)
+
+    return timestamp_ms, samples_array
+
+
 # Callback function for when a message is received
 def on_message_received(topic, payload, **kwargs):
     global message_count, message_length
 
     try:
-        sensor_data = payload.decode("utf-8")
-        kwargs.get("queue").put(sensor_data)
+        timestamp, sensor_data = unpack_cradlewave_numpy(payload)
+        payload_dict = {"timestamp": timestamp, "data": sensor_data.tolist()}
+        kwargs.get("queue").put(json.dumps(payload_dict))
 
         with message_lock:
             # --- Logging Logic ---
