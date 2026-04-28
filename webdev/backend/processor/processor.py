@@ -168,13 +168,18 @@ def signal_processor(
 
     processor = SignalProcessor(sample_rate=15)
 
-    # 10 seconds of data at 15 fps = 150 values
-    buffer_size = 150
+    # 20 seconds of data at 15 fps = 300 values
+    buffer_size = 300
     raw_signal_np = np.zeros(buffer_size)
 
     # Trackers for cold start and inactivity flush
     valid_samples = 0
     last_frame_time = time.time()
+
+    previous_export = {
+        "heart_rate": 0,
+        "breathing_rate": 0,
+    }  # To hold previous values for continuity
 
     logger.info("Signal processor started. Waiting for raw signal queue items...")
 
@@ -199,13 +204,19 @@ def signal_processor(
 
             # Only process and push to Redis if we have a fully saturated buffer
             if valid_samples >= buffer_size:
-                result = processor.process_signal_pipeline(raw_signal_np)
+                result = processor.process_signal_pipeline(
+                    raw_signal_np,
+                    prev_heart_val=previous_export["heart_rate"],
+                    prev_breath_val=previous_export["breathing_rate"],
+                )
                 export = {
                     "timestamp": data["timestamp"],
                     "heart_rate": result["heart_rate_bpm"],
                     "breathing_rate": result["breathing_rate"],
                 }
-
+                previous_export = (
+                    export  # Update previous values for the next iteration
+                )
                 r.lpush(
                     "processed_data", json.dumps(export)
                 )  # Push the processed result back to Redis
