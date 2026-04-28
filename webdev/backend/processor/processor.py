@@ -222,8 +222,16 @@ def signal_processor(
                 )
                 export = {
                     "timestamp": data["timestamp"],
-                    "heart_rate": result["heart_rate_bpm"],
-                    "breathing_rate": result["breathing_rate"],
+                    "heart_rate": (
+                        result["heart_rate_bpm"][0][1]
+                        if result["heart_rate_bpm"]
+                        else previous_export["heart_rate"]
+                    ),
+                    "breathing_rate": (
+                        result["breathing_rate"][0][1]
+                        if result["breathing_rate"]
+                        else previous_export["breathing_rate"]
+                    ),
                 }
                 previous_export = (
                     export  # Update previous values for the next iteration
