@@ -75,6 +75,11 @@ def logging_monitor(
 
 # Input Raw Data Frame -> Output Doppler Map
 def doppler_map(frame):
+    """Takes a 2D frame of raw radar data and computes the Doppler map using a 2D FFT."""
+    if frame.ndim == 1:
+        # Assuming 2048 elements: shape into 32 chirps x 64 samples
+        frame = frame.reshape(32, 64)
+
     # 2D Fast Fourier Transform
     rd = np.fft.fft2(frame)
     # Shift FFT to order negative -> positive frquencies, zero frequency centered
@@ -129,7 +134,15 @@ def frame_processor(
                 continue  # Timeout hit, loop back and check shutdown_flag
             queue_name, msg = redis_result
             msg_dict = json.loads(msg)
-            data = frame_to_scalar(msg_dict.get("data", []))
+            frame = np.array(msg_dict.get("data", [])).reshape(
+                32, 64
+            )  # Reshape to 2D if needed
+            if frame.shape != (32, 64):
+                logger.warning(
+                    f"Unexpected frame shape: {frame.shape}. Expected (32, 64). Skipping this frame."
+                )
+                continue
+            data = frame_to_scalar(frame)
             raw_signal_queue.put(
                 {"data": data, "timestamp": msg_dict.get("timestamp")}
             )  # Send data to the processing thread
@@ -169,6 +182,7 @@ def signal_processor(
 
     # Trackers for cold start and inactivity flush
     valid_samples = 0
+    samples_since_last_process = 0
     last_frame_time = time.time()
 
     previous_export = {
@@ -196,9 +210,11 @@ def signal_processor(
             # Increment our valid sample counter (cap it at the buffer size)
             if valid_samples < buffer_size:
                 valid_samples += 1
+            samples_since_last_process += 1
 
             # Only process and push to Redis if we have a fully saturated buffer
-            if valid_samples >= buffer_size:
+            # Then reset the buffer to 10 seconds of data (150 samples) to create a sliding window effect, and keep the last 150 samples for continuity
+            if valid_samples >= buffer_size and samples_since_last_process >= 150:
                 result = processor.process_signal_pipeline(
                     raw_signal_np,
                     prev_heart_val=previous_export["heart_rate"],
@@ -222,6 +238,7 @@ def signal_processor(
                 logger.debug(
                     f"Pushed processed data to Redis 'processed_data': {export}"
                 )
+                samples_since_last_process = 0
             else:
                 # Optional: Log the cold start progress
                 logger.debug(
