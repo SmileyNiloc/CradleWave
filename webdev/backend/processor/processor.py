@@ -104,7 +104,7 @@ def frame_to_scalar(frame):
         scalar = np.mean(integratedFrame)
     else:
         # Extract highest sample
-        scalar = np.max(integratedFrame)
+        scalar = np.max(frame1D)
 
     return -scalar  # Invert sign - doppler values record negative
 
