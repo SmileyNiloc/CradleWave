@@ -222,7 +222,7 @@ static const bgt60_reg_init_t bgt60_init_list[] = {
  * Total = 8196 bytes.
  */
 #define BGT60_FRAME_BYTES    (BGT60_TOTAL_SAMPLES * sizeof(uint16_t)) // 8192
-#define MQTT_PAYLOAD_SIZE    (4 + BGT60_FRAME_BYTES) // 8196
+#define MQTT_PAYLOAD_SIZE    (8 + BGT60_FRAME_BYTES) // 8200
 
 //WiFi / MQTT state
 static EventGroupHandle_t s_wifi_event_group;
@@ -793,7 +793,7 @@ static esp_err_t bgt60_restart_frame(void)
 #define BGT60_LOG_FRAME_MODE     2      /* 0=off, 1=stats, 2=stats+head, 3=full */
 #define BGT60_LOG_HEAD_SAMPLES   64     /* how many samples to print in mode 2 */
  
-static void bgt60_log_frame(const uint16_t *frame, uint32_t timestamp_ms)
+static void bgt60_log_frame(const uint16_t *frame, uint64_t timestamp_ms)
 {
 #if BGT60_LOG_FRAME_MODE == 0
     (void)frame;
@@ -813,8 +813,8 @@ static void bgt60_log_frame(const uint16_t *frame, uint32_t timestamp_ms)
     }
     uint32_t mean_x100 = (sum * 100u) / BGT60_TOTAL_SAMPLES;
  
-    ESP_LOGI(TAG, "Frame stats: ts=%lu n=%d min=%u max=%u mean=%lu.%02lu",
-             (unsigned long)timestamp_ms,
+    ESP_LOGI(TAG, "Frame stats: ts=%llu n=%d min=%u max=%u mean=%lu.%02lu",
+             (unsigned long long)timestamp_ms,
              BGT60_TOTAL_SAMPLES,
              vmin, vmax,
              (unsigned long)(mean_x100 / 100u),
@@ -887,8 +887,8 @@ static void radar_publish_task(void *pvParameters)
         // Capture timestamp immediately when IRQ fires.
         struct timeval tv;
         gettimeofday(&tv, NULL);
-        uint32_t timestamp_ms = (uint32_t)((uint64_t)tv.tv_sec * 1000ULL
-                                          + (uint64_t)tv.tv_usec / 1000ULL);
+        uint64_t timestamp_ms = ((uint64_t)tv.tv_sec * 1000ULL
+                                + (uint64_t)tv.tv_usec / 1000ULL);
  
         // Burst-read the full frame from FIFO.
         // Section 5.7: unbounded burst (NBURSTS=0), CS pulled high by driver
@@ -904,8 +904,8 @@ static void radar_publish_task(void *pvParameters)
         bgt60_log_frame(frame, timestamp_ms);
  
         // Build binary payload.
-        memcpy(payload,     &timestamp_ms, 4);
-        memcpy(payload + 4, frame, BGT60_TOTAL_SAMPLES * sizeof(uint16_t));
+        memcpy(payload,     &timestamp_ms, 8);
+        memcpy(payload + 8, frame, BGT60_TOTAL_SAMPLES * sizeof(uint16_t));
  
         // Publish at QoS 0 (fire-and-forget).
         // QoS 1 with 8KB payloads at 15 Hz will saturate the MQTT queue.
@@ -921,8 +921,8 @@ static void radar_publish_task(void *pvParameters)
         if (msg_id < 0) {
             ESP_LOGW(TAG, "MQTT publish failed (queue full?)");
         } else {
-            ESP_LOGI(TAG, "Frame published: ts=%lu  %d bytes",
-                     (unsigned long)timestamp_ms, MQTT_PAYLOAD_SIZE);
+            ESP_LOGI(TAG, "Frame published: ts=%llu  %d bytes",
+                     (unsigned long long)timestamp_ms, MQTT_PAYLOAD_SIZE);
         }
  
         /* Reset FIFO and kick off the next frame. Without this the chip

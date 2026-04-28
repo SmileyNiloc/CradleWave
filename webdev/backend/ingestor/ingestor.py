@@ -56,15 +56,15 @@ def logging_monitor():
 
 
 def unpack_cradlewave(payload_bytes):
-    if len(payload_bytes) != 4100:
-        raise ValueError(f"Expected 4100 bytes, got {len(payload_bytes)}")
+    if len(payload_bytes) != 4104:
+        raise ValueError(f"Expected 4104 bytes, got {len(payload_bytes)}")
 
     # Unpack the timestamp using struct as before
-    timestamp_ms = struct.unpack("<I", payload_bytes[:4])[0]
+    timestamp_ms = struct.unpack("<I", payload_bytes[:8])[0]
 
     # Unpack samples directly using struct
     # '<2048H' means 2048 Little-Endian, Unsigned 2-byte integers (uint16)
-    samples_tuple = struct.unpack("<2048H", payload_bytes[4:])
+    samples_tuple = struct.unpack("<2048H", payload_bytes[8:])
 
     return timestamp_ms, samples_tuple
 
