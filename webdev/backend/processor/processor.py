@@ -210,11 +210,10 @@ def signal_processor(
             # Increment our valid sample counter (cap it at the buffer size)
             if valid_samples < buffer_size:
                 valid_samples += 1
-            samples_since_last_process += 1
 
             # Only process and push to Redis if we have a fully saturated buffer
             # Then reset the buffer to 10 seconds of data (150 samples) to create a sliding window effect, and keep the last 150 samples for continuity
-            if valid_samples >= buffer_size and samples_since_last_process >= 150:
+            if valid_samples >= buffer_size:
                 result = processor.process_signal_pipeline(
                     raw_signal_np,
                     prev_heart_val=previous_export["heart_rate"],
@@ -246,7 +245,9 @@ def signal_processor(
                 logger.debug(
                     f"Pushed processed data to Redis 'processed_data': {export}"
                 )
-                samples_since_last_process = 0
+                valid_samples = (
+                    valid_samples / 2
+                )  # Reset to 10 seconds of data (150 samples) for sliding window effect
             else:
                 # Optional: Log the cold start progress
                 logger.debug(

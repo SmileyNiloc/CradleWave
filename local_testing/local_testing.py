@@ -112,7 +112,9 @@ if __name__ == "__main__":
         [],
         color="#ff4b4b",
         linewidth=3.5,
-        linestyle="-",
+        linestyle="None",
+        marker="o",
+        markersize=8,
         solid_capstyle="round",
     )
 
