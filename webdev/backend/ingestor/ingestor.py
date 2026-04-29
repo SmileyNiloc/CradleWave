@@ -93,6 +93,7 @@ def redis_batch_worker(redis_conn, ingestion_queue, batch_size=100, flush_interv
     """WS_ENDPOINT
     periodically flushes the queue into Redis in bulk.
     """
+    time_since_last_preview = time.time()
     while not shutdown_flag.is_set() or not ingestion_queue.empty():
         batch = []
         # Collect up to batch_size items
@@ -120,11 +121,16 @@ def redis_batch_worker(redis_conn, ingestion_queue, batch_size=100, flush_interv
                     pipe.lpush("raw_sensor_data", item)
                 pipe.execute()
 
-                # Debug message to see the payload being sent
-                preview = batch[0][:150] + "... ]}" if len(batch[0]) > 150 else batch[0]
-                logger.info(
-                    f"Exported batch of {len(batch)} items to Redis. Payload preview: {preview}"
-                )
+                current_time = time.time()
+                if current_time - time_since_last_preview >= 5.0:
+                    preview = (
+                        batch[0][:150] + "... ]}" if len(batch[0]) > 150 else batch[0]
+                    )
+                    total_size = sum(len(item) for item in batch)
+                    logger.info(
+                        f"Exported batch of {len(batch)} items to Redis (Total size: {humanize.naturalsize(total_size)}). Payload preview: {preview}"
+                    )
+                    time_since_last_preview = current_time
 
                 # Mark queue tasks as done
                 for _ in range(len(batch)):

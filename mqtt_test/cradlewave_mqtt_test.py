@@ -102,6 +102,7 @@ if __name__ == "__main__":
     target_fps = 15.0
     frame_interval = 1.0 / target_fps
     next_frame_time = time.time()
+    frames_sent_count = 0
 
     try:
         if args.repeat == 0:
@@ -130,6 +131,7 @@ if __name__ == "__main__":
                         lambda future: throttle_semaphore.release()
                     )
                     in_flight_futures.append(publish_future)
+                    frames_sent_count += 1
 
         else:
             for i in tqdm(
@@ -157,6 +159,7 @@ if __name__ == "__main__":
                     lambda future: throttle_semaphore.release()
                 )
                 in_flight_futures.append(publish_future)
+                frames_sent_count += 1
     except KeyboardInterrupt:
         print("\nTransmission stopped by user.")
 
@@ -173,11 +176,14 @@ if __name__ == "__main__":
     # Metrics
     sample_payload_len = len(generate_payload_bytes(frames[0]))
     print(f"Total time taken: {total_time:.2f} seconds")
-    print(
-        f"Sent {samples * args.repeat} frames in {total_time:.2f} seconds ({(samples * args.repeat)/total_time:.2f} frames/sec)"
-    )
-    print(f"Average time per frame: {total_time/(samples * args.repeat):.4f} seconds")
-    print(f"Average payload size: {sample_payload_len} bytes")
-    print(
-        f"Average MB per second: {(sample_payload_len*samples)/total_time/1024/1024:.2f} MB/sec"
-    )
+    if frames_sent_count > 0:
+        print(
+            f"Sent {frames_sent_count} frames in {total_time:.2f} seconds ({frames_sent_count/total_time:.2f} frames/sec)"
+        )
+        print(f"Average time per frame: {total_time/frames_sent_count:.4f} seconds")
+        print(f"Average payload size: {sample_payload_len} bytes")
+        print(
+            f"Average MB per second: {(sample_payload_len*frames_sent_count)/total_time/1024/1024:.2f} MB/sec"
+        )
+    else:
+        print("No frames were sent.")
