@@ -59,8 +59,8 @@ def unpack_cradlewave(payload_bytes):
     if len(payload_bytes) != 4104:
         raise ValueError(f"Expected 4104 bytes, got {len(payload_bytes)}")
 
-    # Unpack the timestamp using struct as before
-    timestamp_ms = struct.unpack("<I", payload_bytes[:8])[0]
+    # Unpack the timestamp using struct as 64-bit uint
+    timestamp_ms = struct.unpack("<Q", payload_bytes[:8])[0]
 
     # Unpack samples directly using struct
     # '<2048H' means 2048 Little-Endian, Unsigned 2-byte integers (uint16)

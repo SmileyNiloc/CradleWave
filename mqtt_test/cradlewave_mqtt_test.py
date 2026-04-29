@@ -21,8 +21,8 @@ MAX_IN_FLIGHT = 50  # Keep exactly 50 messages on the wire at all times
 
 
 def generate_payload_bytes(data):
-    # Get current timestamp in milliseconds and fit it in an unsigned 32-bit int
-    ms_timestamp = int(time.time_ns() // 1_000_000) & 0xFFFFFFFF
+    # Get current timestamp in milliseconds and fit it in an unsigned 64-bit int
+    ms_timestamp = int(time.time_ns() // 1_000_000) & 0xFFFFFFFFFFFFFFFF
 
     # Convert samples to integers, ensuring they fit in a 16-bit unsigned integer
     # Handle floats by casting to int
@@ -32,10 +32,10 @@ def generate_payload_bytes(data):
     if len(samples) < 2048:
         samples.extend([0] * (2048 - len(samples)))
 
-    # Pack the timestamp as a 32-bit unsigned int (<I) = 4 bytes
+    # Pack the timestamp as a 64-bit unsigned int (<Q) = 8 bytes
     # Pack the 2048 samples as 16-bit unsigned ints (<2048H) = 4096 bytes
-    # Total = 4100 bytes
-    return struct.pack("<I2048H", ms_timestamp, *samples)
+    # Total = 4104 bytes
+    return struct.pack("<Q2048H", ms_timestamp, *samples)
 
 
 if __name__ == "__main__":
