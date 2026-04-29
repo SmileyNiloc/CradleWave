@@ -25,12 +25,22 @@ def redis_publisher(data, shutdown_flag):
     r = redis.Redis(host="localhost", port=6379, decode_responses=True)
     r.ping()
     print("Publisher: Connected to Redis successfully!")
+    last_print_time = time.time()
     while not shutdown_flag.is_set():
         for frame in data:
             if shutdown_flag.is_set():
                 break
             payload = {"timestamp": int(time.time() * 1000), "data": frame}
             r.rpush("raw_sensor_data", json.dumps(payload))
+
+            # Print the value being sent every 5 seconds
+            current_time = time.time()
+            if current_time - last_print_time >= 5.0:
+                print(
+                    f"Publisher: Sent frame at timestamp {payload['timestamp']}. Data preview: {frame[:5]}... (Total {len(frame)} elements)"
+                )
+                last_print_time = current_time
+
             time.sleep(1 / 15.0)  # Sleep to enforce exactly 15fps
 
 

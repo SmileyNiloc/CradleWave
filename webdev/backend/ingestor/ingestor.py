@@ -120,6 +120,12 @@ def redis_batch_worker(redis_conn, ingestion_queue, batch_size=100, flush_interv
                     pipe.lpush("raw_sensor_data", item)
                 pipe.execute()
 
+                # Debug message to see the payload being sent
+                preview = batch[0][:150] + "... ]}" if len(batch[0]) > 150 else batch[0]
+                logger.info(
+                    f"Exported batch of {len(batch)} items to Redis. Payload preview: {preview}"
+                )
+
                 # Mark queue tasks as done
                 for _ in range(len(batch)):
                     ingestion_queue.task_done()

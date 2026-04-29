@@ -99,10 +99,48 @@ if __name__ == "__main__":
     print("Starting transmission...")
     start_timestamp = time.time()  # Start timing HERE, after connection
 
-    if args.repeat == 0:
-        print("Repeating indefinitely. Press Ctrl+C to stop.")
-        while True:
-            for i in tqdm(range(samples), desc="Sending to AWS", unit="msg"):
+    target_fps = 15.0
+    frame_interval = 1.0 / target_fps
+    next_frame_time = time.time()
+
+    try:
+        if args.repeat == 0:
+            print("Repeating indefinitely. Press Ctrl+C to stop.")
+            while True:
+                for i in tqdm(range(samples), desc="Sending to AWS", unit="msg"):
+                    # Enforce strict 15 FPS frame pacing
+                    now = time.time()
+                    if now < next_frame_time:
+                        time.sleep(next_frame_time - now)
+                    next_frame_time = time.time() + frame_interval
+
+                    # Wait for an open slot in our sliding window
+                    throttle_semaphore.acquire()
+
+                    payload_bytes = generate_payload_bytes(frames[i % len(frames)])
+
+                    publish_future, packet_id = mqtt_connection.publish(
+                        topic=TOPIC,
+                        payload=payload_bytes,
+                        qos=mqtt.QoS.AT_LEAST_ONCE,
+                    )
+
+                    # Attach non-blocking callback to release the semaphore slot
+                    publish_future.add_done_callback(
+                        lambda future: throttle_semaphore.release()
+                    )
+                    in_flight_futures.append(publish_future)
+
+        else:
+            for i in tqdm(
+                range(samples * args.repeat), desc="Sending to AWS", unit="msg"
+            ):
+                # Enforce strict 15 FPS frame pacing
+                now = time.time()
+                if now < next_frame_time:
+                    time.sleep(next_frame_time - now)
+                next_frame_time = time.time() + frame_interval
+
                 # Wait for an open slot in our sliding window
                 throttle_semaphore.acquire()
 
@@ -119,22 +157,8 @@ if __name__ == "__main__":
                     lambda future: throttle_semaphore.release()
                 )
                 in_flight_futures.append(publish_future)
-
-    for i in tqdm(range(samples * args.repeat), desc="Sending to AWS", unit="msg"):
-        # Wait for an open slot in our sliding window
-        throttle_semaphore.acquire()
-
-        payload_bytes = generate_payload_bytes(frames[i % len(frames)])
-
-        publish_future, packet_id = mqtt_connection.publish(
-            topic=TOPIC,
-            payload=payload_bytes,
-            qos=mqtt.QoS.AT_LEAST_ONCE,
-        )
-
-        # Attach non-blocking callback to release the semaphore slot
-        publish_future.add_done_callback(lambda future: throttle_semaphore.release())
-        in_flight_futures.append(publish_future)
+    except KeyboardInterrupt:
+        print("\nTransmission stopped by user.")
 
     # Wait for the very last batch to finish acknowledging
     for future in in_flight_futures:
