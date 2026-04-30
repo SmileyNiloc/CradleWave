@@ -97,6 +97,9 @@ if __name__ == "__main__":
         throttle_semaphore.release()
 
     print("Starting transmission...")
+    preview = [round(val, 2) for val in frames[0][:5]]
+    print(f"Preview of first frame: {preview}... (Total {len(frames[0])} elements)")
+
     start_timestamp = time.time()  # Start timing HERE, after connection
 
     target_fps = 15.0

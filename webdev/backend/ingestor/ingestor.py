@@ -30,13 +30,25 @@ message_lock = threading.Lock()
 message_count = 0
 message_length = 0
 
+# Global variables for previews
+latest_raw_topic = None
+latest_raw_payload = None
+latest_unpacked_timestamp = None
+latest_unpacked_data = None
+latest_batch_size = 0
+latest_batch_len = 0
+latest_batch_preview = None
+
 # Global Threading event to signal shutdown
 shutdown_flag = threading.Event()
 
 
 def logging_monitor():
-    """Runs in the background and wakes every 5 seconds to log the current throughput."""
+    """Runs in the background and wakes every 5 seconds to log the current throughput and previews."""
     global message_count, message_length
+    global latest_raw_topic, latest_raw_payload, latest_unpacked_timestamp, latest_unpacked_data
+    global latest_batch_size, latest_batch_len, latest_batch_preview
+
     last_log_time = time.time()
 
     while True:
@@ -47,12 +59,32 @@ def logging_monitor():
         with message_lock:
             if message_count > 0:
                 logger.info(
-                    f"Health Check: Pushed {message_count} messages to Redis in the last {time_elapsed:.1f} seconds. payload handled per second: {humanize.naturalsize((message_length)/time_elapsed)}/s"
+                    f"Health Check: Received {message_count} messages from AWS in the last {time_elapsed:.1f} seconds. Payload handled per second: {humanize.naturalsize((message_length)/time_elapsed)}/s"
                 )
+
+                # Log the MQTT In Preview
+                if latest_raw_payload is not None:
+                    logger.info(
+                        f"MQTT In Preview -> topic='{latest_raw_topic}', raw payload={repr(latest_raw_payload[:50])}... (Total {len(latest_raw_payload)} bytes)"
+                    )
+
+                # Log the Unpacked Data Preview
+                if latest_unpacked_data is not None:
+                    logger.info(
+                        f"Unpacked Preview -> timestamp={latest_unpacked_timestamp}, parsed data={latest_unpacked_data}... (Total 2048 elements)"
+                    )
+
+                # Log the Redis Export Preview
+                if latest_batch_preview is not None:
+                    logger.info(
+                        f"Redis Export Preview -> Pushed batch of {latest_batch_len} items (Total size: {humanize.naturalsize(latest_batch_size)}). Data: {latest_batch_preview}"
+                    )
+
                 # Reset the counters
                 message_count = 0
                 message_length = 0
-                last_log_time = current_time
+
+            last_log_time = current_time
 
 
 def unpack_cradlewave(payload_bytes):
@@ -72,9 +104,11 @@ def unpack_cradlewave(payload_bytes):
 # Callback function for when a message is received
 def on_message_received(topic, payload, **kwargs):
     global message_count, message_length
+    global latest_raw_topic, latest_raw_payload, latest_unpacked_timestamp, latest_unpacked_data
 
     try:
         timestamp, sensor_data = unpack_cradlewave(payload)
+
         payload_dict = {"timestamp": timestamp, "data": list(sensor_data)}
         kwargs.get("queue").put(json.dumps(payload_dict))
 
@@ -82,6 +116,10 @@ def on_message_received(topic, payload, **kwargs):
             # --- Logging Logic ---
             message_count += 1
             message_length += len(payload)
+            latest_raw_topic = topic
+            latest_raw_payload = payload
+            latest_unpacked_timestamp = timestamp
+            latest_unpacked_data = list(sensor_data[:5])
 
     except Exception as e:
         logger.error(
@@ -93,7 +131,8 @@ def redis_batch_worker(redis_conn, ingestion_queue, batch_size=100, flush_interv
     """WS_ENDPOINT
     periodically flushes the queue into Redis in bulk.
     """
-    time_since_last_preview = time.time()
+    global latest_batch_len, latest_batch_size, latest_batch_preview
+
     while not shutdown_flag.is_set() or not ingestion_queue.empty():
         batch = []
         # Collect up to batch_size items
@@ -121,16 +160,12 @@ def redis_batch_worker(redis_conn, ingestion_queue, batch_size=100, flush_interv
                     pipe.lpush("raw_sensor_data", item)
                 pipe.execute()
 
-                current_time = time.time()
-                if current_time - time_since_last_preview >= 5.0:
-                    preview = (
+                with message_lock:
+                    latest_batch_len = len(batch)
+                    latest_batch_size = sum(len(item) for item in batch)
+                    latest_batch_preview = (
                         batch[0][:150] + "... ]}" if len(batch[0]) > 150 else batch[0]
                     )
-                    total_size = sum(len(item) for item in batch)
-                    logger.info(
-                        f"Exported batch of {len(batch)} items to Redis (Total size: {humanize.naturalsize(total_size)}). Payload preview: {preview}"
-                    )
-                    time_since_last_preview = current_time
 
                 # Mark queue tasks as done
                 for _ in range(len(batch)):
