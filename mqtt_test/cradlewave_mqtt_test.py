@@ -24,9 +24,13 @@ def generate_payload_bytes(data):
     # Get current timestamp in milliseconds and fit it in an unsigned 64-bit int
     ms_timestamp = int(time.time_ns() // 1_000_000) & 0xFFFFFFFFFFFFFFFF
 
-    # Convert samples to integers, ensuring they fit in a 16-bit unsigned integer
-    # Handle floats by casting to int
-    samples = [int(val) for val in data][:2048]
+    # The real ESP32 sends uint16_t (12-bit ADC values, 0-4095).
+    # Since our test CSV data uses tiny floats (-0.08... 0.08),
+    # we need to map them back to positive 16-bit integers to avoid truncating everything to 0.
+    samples = []
+    for val in data[:2048]:
+        scaled = int((val + 1.0) * 2047.5)  # Roughly maps (-1.0 -> 1.0) to (0 -> 4095)
+        samples.append(max(0, min(65535, scaled)))
 
     # Pad to exactly 2048 samples if necessary
     if len(samples) < 2048:

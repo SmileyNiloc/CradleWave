@@ -95,7 +95,7 @@ def unpack_cradlewave(payload_bytes):
     timestamp_ms = struct.unpack("<Q", payload_bytes[:8])[0]
 
     # Unpack samples directly using struct
-    # '<2048H' means 2048 Little-Endian, Unsigned 2-byte integers (uint16)
+    # '<2048H' means 2048 Little-Endian, Unsigned 16-bit integers
     samples_tuple = struct.unpack("<2048H", payload_bytes[8:])
 
     return timestamp_ms, samples_tuple
