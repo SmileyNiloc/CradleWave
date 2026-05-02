@@ -1,5 +1,6 @@
 <script setup>
 // import ApiTest from "./components/api-test.vue";
+import StatusMonitor from "./components/StatusMonitor.vue";
 import hrGraph from "./components/hrGraph.vue";
 import breathingGraph from "./components/breathingGraph.vue";
 import { reactive, provide } from "vue";
@@ -25,9 +26,14 @@ provide("selectedSession", selection);
     </header>
     <main class="main-content">
       <div class="content-grid">
-        <section class="graph-section">
-          <hrGraph />
-          <breathingGraph />
+        <section class="dashboard-section">
+          <div class="status-panel">
+            <StatusMonitor />
+          </div>
+          <div class="graphs-grid">
+            <hrGraph />
+            <breathingGraph />
+          </div>
         </section>
       </div>
     </main>
@@ -145,21 +151,28 @@ provide("selectedSession", selection);
   align-items: stretch;
 }
 
-.sidebar {
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  padding: 1.5rem;
-  position: sticky;
-  top: 2rem;
-  max-height: calc(100vh - 4rem);
-  overflow-y: auto;
-}
-
-.graph-section {
+.dashboard-section {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+.status-panel {
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.graphs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 1024px) {
+  .graphs-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .session-info {

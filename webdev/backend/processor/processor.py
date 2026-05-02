@@ -19,6 +19,7 @@ def logging_monitor(
     process_data_length,
     frames_processed_count,
     processed_data_pushed_count,
+    shared_samples,
 ):
     """Runs in the background and wakes every 5 seconds to log the current throughput."""
 
@@ -50,15 +51,18 @@ def logging_monitor(
                     f"Throughput ({time_elapsed:.1f}s): "
                     f"Ingested {process_data_count.value} msgs ({humanize.naturalsize(bytes_per_sec)}/s) | "
                     f"Processed {frames_processed_count.value} queued frames | "
-                    f"Pushed {processed_data_pushed_count.value} outputs to Redis out-queue."
+                    f"Pushed {processed_data_pushed_count.value} outputs to Redis out-queue.\n"
+                    f"    Sample -> Frame Max: {shared_samples.get('ingested_frame', 'N/A')} | Scalar: {shared_samples.get('processed_scalar', 'N/A')} | Pushed: {shared_samples.get('pushed_output', 'None')}"
                 )
 
-                # Reset the counters
+                # Reset the counters and clear samples
                 process_data_count.value = 0
                 process_data_length.value = 0
                 frames_processed_count.value = 0
                 processed_data_pushed_count.value = 0
                 health_check_idle_count = 0
+
+                shared_samples["pushed_output"] = None
             elif health_check_idle_count < 3:  # Limit idle logs to avoid spamming
                 # OPTIONAL FIX: Give a heartbeat even when idle so you know the thread is alive
                 logger.info("Health Check: System idle. 0 messages processed.")
@@ -117,6 +121,7 @@ def frame_processor(
     log_lock,
     process_data_count,
     process_data_length,
+    shared_samples,
 ):
     """Main function to connect to Redis and process incoming data."""
     try:
@@ -146,9 +151,16 @@ def frame_processor(
             raw_signal_queue.put(
                 {"data": data, "timestamp": msg_dict.get("timestamp")}
             )  # Send data to the processing thread
+
             with log_lock:
                 process_data_count.value += 1
                 process_data_length.value += len(msg.encode("utf-8"))
+
+                # Periodically sample the data for the logger every 15 frames
+                if process_data_count.value == 1 or process_data_count.value % 15 == 0:
+                    shared_samples["ingested_frame"] = f"{float(np.max(frame)):.2f}"
+                    shared_samples["processed_scalar"] = f"{float(data):.2f}"
+
         except redis.ConnectionError as e:
             logger.error(f"Redis connection error: {e}")
             time.sleep(2)  # Back off and let Redis recover
@@ -165,6 +177,7 @@ def signal_processor(
     log_lock,
     frames_processed_count,
     processed_data_pushed_count,
+    shared_samples,
 ):
     """Consumes processed signal data from the queue, does further processing if needed, and then pushes results back to Redis."""
     # Connect to Redis
@@ -241,13 +254,15 @@ def signal_processor(
 
                 with log_lock:
                     processed_data_pushed_count.value += 1
+                    shared_samples["pushed_output"] = (
+                        f"HR: {export['heart_rate']:.1f} "
+                        f"| BR: {export['breathing_rate']:.1f}"
+                    )
 
                 logger.debug(
                     f"Pushed processed data to Redis 'processed_data': {export}"
                 )
-                valid_samples = (
-                    valid_samples / 2
-                )  # Reset to 10 seconds of data (150 samples) for sliding window effect
+                valid_samples = 0  # Reset to 10 seconds of data (150 samples) for sliding window effect
             else:
                 # Optional: Log the cold start progress
                 logger.debug(
@@ -292,6 +307,13 @@ if __name__ == "__main__":
     frames_processed_count = multiprocessing.Value("i", 0)
     processed_data_pushed_count = multiprocessing.Value("i", 0)
 
+    # Use a multiprocessing dict to share strings across processes for logging samples
+    manager = multiprocessing.Manager()
+    shared_samples = manager.dict()
+    shared_samples["ingested_frame"] = "None"
+    shared_samples["processed_scalar"] = "None"
+    shared_samples["pushed_output"] = "None"
+
     # Implement a queue for handling data between threads
     raw_signal_queue = multiprocessing.Queue()
 
@@ -305,6 +327,7 @@ if __name__ == "__main__":
             process_data_length,
             frames_processed_count,
             processed_data_pushed_count,
+            shared_samples,
         ),
         daemon=True,
     )
@@ -322,6 +345,7 @@ if __name__ == "__main__":
             log_lock,
             process_data_count,
             process_data_length,
+            shared_samples,
         ),
     )
     frame_thread.start()
@@ -337,6 +361,7 @@ if __name__ == "__main__":
             log_lock,
             frames_processed_count,
             processed_data_pushed_count,
+            shared_samples,
         ),
         daemon=True,
     )
