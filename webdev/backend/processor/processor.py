@@ -15,11 +15,7 @@ logger = logging.getLogger(__name__)
 def logging_monitor(
     shutdown_flag,
     log_lock,
-    process_data_count,
-    process_data_length,
-    frames_processed_count,
-    processed_data_pushed_count,
-    shared_samples,
+    shared_state,
 ):
     """Runs in the background and wakes every 5 seconds to log the current throughput."""
 
@@ -36,33 +32,33 @@ def logging_monitor(
         with log_lock:
             # Check if any part of the pipeline had activity
             if (
-                process_data_count.value > 0
-                or frames_processed_count.value > 0
-                or processed_data_pushed_count.value > 0
+                shared_state["process_data_count"] > 0
+                or shared_state["frames_processed_count"] > 0
+                or shared_state["processed_data_pushed_count"] > 0
             ):
                 # Calculate MB/s, guarding against division by zero
                 bytes_per_sec = (
-                    (process_data_length.value) / time_elapsed
+                    shared_state["process_data_length"] / time_elapsed
                     if time_elapsed > 0
                     else 0
                 )
 
                 logger.info(
                     f"Throughput ({time_elapsed:.1f}s): "
-                    f"Ingested {process_data_count.value} msgs ({humanize.naturalsize(bytes_per_sec)}/s) | "
-                    f"Processed {frames_processed_count.value} queued frames | "
-                    f"Pushed {processed_data_pushed_count.value} outputs to Redis out-queue.\n"
-                    f"    Sample -> Frame Max: {shared_samples.get('ingested_frame', 'N/A')} | Scalar: {shared_samples.get('processed_scalar', 'N/A')} | Pushed: {shared_samples.get('pushed_output', 'None')}"
+                    f"Ingested {shared_state['process_data_count']} msgs ({humanize.naturalsize(bytes_per_sec)}/s) | "
+                    f"Processed {shared_state['frames_processed_count']} queued frames | "
+                    f"Pushed {shared_state['processed_data_pushed_count']} outputs to Redis out-queue.\n"
+                    f"    Sample -> Frame Max: {shared_state.get('ingested_frame', 'N/A')} | Scalar: {shared_state.get('processed_scalar', 'N/A')} | Pushed: {shared_state.get('pushed_output', 'None')}"
                 )
 
                 # Reset the counters and clear samples
-                process_data_count.value = 0
-                process_data_length.value = 0
-                frames_processed_count.value = 0
-                processed_data_pushed_count.value = 0
+                shared_state["process_data_count"] = 0
+                shared_state["process_data_length"] = 0
+                shared_state["frames_processed_count"] = 0
+                shared_state["processed_data_pushed_count"] = 0
                 health_check_idle_count = 0
 
-                shared_samples["pushed_output"] = None
+                shared_state["pushed_output"] = None
             elif health_check_idle_count < 3:  # Limit idle logs to avoid spamming
                 # OPTIONAL FIX: Give a heartbeat even when idle so you know the thread is alive
                 logger.info("Health Check: System idle. 0 messages processed.")
@@ -84,8 +80,17 @@ def doppler_map(frame):
         # Assuming 2048 elements: shape into 32 chirps x 64 samples
         frame = frame.reshape(32, 64)
 
+    # Remove DC Offset and Normalize
+    frame_float = frame.astype(float)
+
+    # Subtract the mean (average of the frame) to center precisely around zero
+    frame_centered = frame_float - np.mean(frame_float)
+
+    # Normalize by dividing by the 12-bit ADC max value (4096) to scale between 0 and 1
+    frame_normalized = frame_centered / 4096.0
+
     # 2D Fast Fourier Transform
-    rd = np.fft.fft2(frame)
+    rd = np.fft.fft2(frame_normalized)
     # Shift FFT to order negative -> positive frquencies, zero frequency centered
     rd = np.fft.fftshift(rd, axes=0)
     # Convert to dB
@@ -119,9 +124,7 @@ def frame_processor(
     raw_signal_queue,
     shutdown_flag,
     log_lock,
-    process_data_count,
-    process_data_length,
-    shared_samples,
+    shared_state,
 ):
     """Main function to connect to Redis and process incoming data."""
     try:
@@ -153,13 +156,16 @@ def frame_processor(
             )  # Send data to the processing thread
 
             with log_lock:
-                process_data_count.value += 1
-                process_data_length.value += len(msg.encode("utf-8"))
+                shared_state["process_data_count"] += 1
+                shared_state["process_data_length"] += len(msg.encode("utf-8"))
 
                 # Periodically sample the data for the logger every 15 frames
-                if process_data_count.value == 1 or process_data_count.value % 15 == 0:
-                    shared_samples["ingested_frame"] = f"{float(np.max(frame)):.2f}"
-                    shared_samples["processed_scalar"] = f"{float(data):.2f}"
+                if (
+                    shared_state["process_data_count"] == 1
+                    or shared_state["process_data_count"] % 15 == 0
+                ):
+                    shared_state["ingested_frame"] = f"{float(np.max(frame)):.2f}"
+                    shared_state["processed_scalar"] = f"{float(data):.2f}"
 
         except redis.ConnectionError as e:
             logger.error(f"Redis connection error: {e}")
@@ -175,9 +181,7 @@ def signal_processor(
     raw_signal_queue,
     shutdown_flag,
     log_lock,
-    frames_processed_count,
-    processed_data_pushed_count,
-    shared_samples,
+    shared_state,
 ):
     """Consumes processed signal data from the queue, does further processing if needed, and then pushes results back to Redis."""
     # Connect to Redis
@@ -214,7 +218,7 @@ def signal_processor(
             last_frame_time = time.time()
 
             with log_lock:
-                frames_processed_count.value += 1
+                shared_state["frames_processed_count"] += 1
 
             # Manually shift the raw_signal_np and append the new data to the end
             raw_signal_np[:-1] = raw_signal_np[1:]  # Shift left by one
@@ -253,8 +257,8 @@ def signal_processor(
                 )  # Push the processed result back to Redis
 
                 with log_lock:
-                    processed_data_pushed_count.value += 1
-                    shared_samples["pushed_output"] = (
+                    shared_state["processed_data_pushed_count"] += 1
+                    shared_state["pushed_output"] = (
                         f"HR: {export['heart_rate']:.1f} "
                         f"| BR: {export['breathing_rate']:.1f}"
                     )
@@ -300,19 +304,21 @@ if __name__ == "__main__":
 
     shutdown_flag = multiprocessing.Event()
     log_lock = multiprocessing.Lock()
-    process_data_count = multiprocessing.Value("i", 0)
-    process_data_length = multiprocessing.Value("i", 0)
 
-    # New metrics for the signal_processor stage
-    frames_processed_count = multiprocessing.Value("i", 0)
-    processed_data_pushed_count = multiprocessing.Value("i", 0)
-
-    # Use a multiprocessing dict to share strings across processes for logging samples
+    # Use a multiprocessing dict to share ALL state across processes
     manager = multiprocessing.Manager()
-    shared_samples = manager.dict()
-    shared_samples["ingested_frame"] = "None"
-    shared_samples["processed_scalar"] = "None"
-    shared_samples["pushed_output"] = "None"
+    shared_state = manager.dict()
+
+    # Initialize metrics
+    shared_state["process_data_count"] = 0
+    shared_state["process_data_length"] = 0
+    shared_state["frames_processed_count"] = 0
+    shared_state["processed_data_pushed_count"] = 0
+
+    # Initialize samples
+    shared_state["ingested_frame"] = "None"
+    shared_state["processed_scalar"] = "None"
+    shared_state["pushed_output"] = "None"
 
     # Implement a queue for handling data between threads
     raw_signal_queue = multiprocessing.Queue()
@@ -323,11 +329,7 @@ if __name__ == "__main__":
         args=(
             shutdown_flag,
             log_lock,
-            process_data_count,
-            process_data_length,
-            frames_processed_count,
-            processed_data_pushed_count,
-            shared_samples,
+            shared_state,
         ),
         daemon=True,
     )
@@ -343,9 +345,7 @@ if __name__ == "__main__":
             raw_signal_queue,
             shutdown_flag,
             log_lock,
-            process_data_count,
-            process_data_length,
-            shared_samples,
+            shared_state,
         ),
     )
     frame_thread.start()
@@ -359,9 +359,7 @@ if __name__ == "__main__":
             raw_signal_queue,
             shutdown_flag,
             log_lock,
-            frames_processed_count,
-            processed_data_pushed_count,
-            shared_samples,
+            shared_state,
         ),
         daemon=True,
     )
