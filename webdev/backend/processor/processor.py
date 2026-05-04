@@ -250,13 +250,13 @@ def signal_processor(
                     ),
                     # Ensure we export the last valid point of the filtered arrays (flattened scalar for that frame)
                     "filtered_heart": (
-                        result["filtered_heart"][-1]
+                        result["filtered_heart"]
                         if result["filtered_heart"] is not None
                         and len(result["filtered_heart"]) > 0
                         else 0
                     ),
                     "filtered_breath": (
-                        result["filtered_breath"][-1]
+                        result["filtered_breath"]
                         if result["filtered_breath"] is not None
                         and len(result["filtered_breath"]) > 0
                         else 0
