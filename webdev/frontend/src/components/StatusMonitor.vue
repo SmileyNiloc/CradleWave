@@ -39,6 +39,21 @@
         </div>
       </div>
     </div>
+
+    <!-- Critical Web Banners -->
+    <div
+      v-if="isReceivingData && latestHR !== null && latestHR < 48"
+      class="critical-warning-banner"
+    >
+      ⚠️ <strong>No Heart Rate Detected:</strong> Heart rate is too low
+    </div>
+
+    <div
+      v-if="isReceivingData && latestBR !== null && latestBR < 8"
+      class="critical-warning-banner"
+    >
+      ⚠️ <strong>No Breathing Rate Detected:</strong> Breathing rate is too low
+    </div>
   </div>
 </template>
 
@@ -127,8 +142,8 @@ const hrStatus = computed(() => {
   if (!isReceivingData.value || latestHR.value === null) {
     return { message: "Waiting for data...", class: "neutral" };
   }
-  if (latestHR.value < 40)
-    return { message: "Low Heart Rate", class: "warning" };
+  if (latestHR.value < 48)
+    return { message: "Low Heart Rate", class: "danger" };
   if (latestHR.value > 120)
     return { message: "High Heart Rate", class: "warning" };
   return { message: "Normal Range", class: "good" };
@@ -138,7 +153,7 @@ const brStatus = computed(() => {
   if (!isReceivingData.value || latestBR.value === null) {
     return { message: "Waiting for data...", class: "neutral" };
   }
-  if (latestBR.value < 8) return { message: "Low Breathing", class: "warning" };
+  if (latestBR.value < 8) return { message: "Low Breathing", class: "danger" };
   if (latestBR.value > 25)
     return { message: "High Breathing", class: "warning" };
   return { message: "Normal Range", class: "good" };
@@ -285,5 +300,33 @@ const brStatus = computed(() => {
 }
 .metric-message.warning {
   color: #f59e0b;
+}
+.metric-message.danger {
+  color: #ef4444;
+  font-weight: 700;
+}
+
+.critical-warning-banner {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background-color: #ef4444;
+  color: white;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+  animation: pulse-red 2s infinite;
+}
+
+@keyframes pulse-red {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.015);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 </style>

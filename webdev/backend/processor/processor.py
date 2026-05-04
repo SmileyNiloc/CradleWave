@@ -248,6 +248,20 @@ def signal_processor(
                         if result["breathing_rate"]
                         else previous_export["breathing_rate"]
                     ),
+                    "filtered_heart": (
+                        (
+                            result["filtered_heart"][0][1]
+                            if result["filtered_heart"]
+                            else previous_export["filtered_heart"]
+                        ),
+                    ),
+                    "filtered_breathing": (
+                        (
+                            result["filtered_breathing"][0][1]
+                            if result["filtered_breathing"]
+                            else previous_export["filtered_breathing"]
+                        ),
+                    ),
                 }
                 previous_export = (
                     export  # Update previous values for the next iteration

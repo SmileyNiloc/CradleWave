@@ -2,7 +2,6 @@ import logging, os, firebase_admin, threading, redis, queue, time, json
 from firebase_admin import credentials, firestore
 from datetime import datetime
 
-
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -42,6 +41,8 @@ def send_vitals_to_firestore_batch(device: str, collection: str, vitals_list: li
                 "timestamp": v["timestamp"],
                 "heart_rate": v["heart_rate"],
                 "breathing_rate": v["breathing_rate"],
+                "filtered_breath": v.get("filtered_breath", None),
+                "filtered_heart": v.get("filtered_heart", None),
             }
         )
 
