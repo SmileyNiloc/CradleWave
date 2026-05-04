@@ -13,6 +13,11 @@ services:
         "--maxmemory-policy",
         "allkeys-lru",
       ]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   processor:
     image: ghcr.io/smileyniloc/cradlewave-processor:main
@@ -21,6 +26,11 @@ services:
     network_mode: host
     depends_on:
       - redis
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   exporter:
     image: ghcr.io/smileyniloc/cradlewave-exporter:main
@@ -35,6 +45,11 @@ services:
       - "8080:8080"
     depends_on:
       - redis
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   ingestor:
     image: ghcr.io/smileyniloc/cradlewave-ingestor:main
@@ -50,3 +65,8 @@ services:
       - AWS_PRIVATE_KEY=/app/certs/oracle-vm.private.key
       - AWS_CERT=/app/certs/oracle-vm.cert.pem
       - AWS_ENDPOINT=a1py3mdrrjrz1-ats.iot.us-east-1.amazonaws.com
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -3,6 +3,11 @@ services:
     image: redis:alpine
     ports:
       - "6379:6379"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   processor:
     build:
@@ -12,3 +17,8 @@ services:
       - REDIS_HOST=redis
     depends_on:
       - redis
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
