@@ -129,6 +129,8 @@ const chartOption = computed(() => {
     },
     xAxis: {
       type: "time",
+      min: points.length > 0 ? points[points.length - 1][0] - 5 * 60 * 1000 : undefined,
+      max: points.length > 0 ? points[points.length - 1][0] : undefined,
       boundaryGap: false,
       axisLine: { lineStyle: { color: "#666" } },
       axisLabel: {

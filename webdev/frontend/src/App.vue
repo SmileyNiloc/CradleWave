@@ -3,6 +3,7 @@
 import StatusMonitor from "./components/StatusMonitor.vue";
 import hrGraph from "./components/hrGraph.vue";
 import breathingGraph from "./components/breathingGraph.vue";
+import filteredGraph from "./components/filteredGraph.vue";
 import { reactive, provide } from "vue";
 
 const selection = reactive({
@@ -33,6 +34,9 @@ provide("selectedSession", selection);
           <div class="graphs-grid">
             <hrGraph />
             <breathingGraph />
+            <div class="full-width-graph">
+              <filteredGraph />
+            </div>
           </div>
         </section>
       </div>
@@ -169,9 +173,16 @@ provide("selectedSession", selection);
   gap: 1.5rem;
 }
 
+.full-width-graph {
+  grid-column: 1 / -1;
+}
+
 @media (max-width: 1024px) {
   .graphs-grid {
     grid-template-columns: 1fr;
+  }
+  .full-width-graph {
+    grid-column: 1;
   }
 }
 
