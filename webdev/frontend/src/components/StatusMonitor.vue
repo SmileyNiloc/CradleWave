@@ -119,8 +119,8 @@ onUnmounted(() => {
 
 const isReceivingData = computed(() => {
   if (lastUpdateTime.value === 0) return false;
-  // Deem offline if 15 seconds pass without an update
-  return currentTime.value - lastUpdateTime.value < 15000;
+  // Deem offline if 30 seconds pass without an update
+  return currentTime.value - lastUpdateTime.value < 30000;
 });
 
 const hrStatus = computed(() => {
