@@ -51,40 +51,57 @@ watch(
 // We need two series for this graph: Filtered Heart and Filtered Breath
 const graphDataHR = computed(() => {
   if (!recentDocs.value || recentDocs.value.length === 0) return [];
-  const points = [];
   const latestDoc = recentDocs.value[0];
-  if (latestDoc.data_points) {
-    latestDoc.data_points.forEach((dp) => {
-      if (dp.timestamp && dp.timestamp.toDate && dp.filtered_heart != null) {
-        points.push([dp.timestamp.toDate().getTime(), dp.filtered_heart]);
-      }
-    });
+  if (!latestDoc.data_points || latestDoc.data_points.length === 0) return [];
+
+  // Plot just the latest 20 seconds of data from the last timepoint
+  const lastDp = latestDoc.data_points[latestDoc.data_points.length - 1];
+  if (
+    !lastDp ||
+    !lastDp.timestamp ||
+    !lastDp.timestamp.toDate ||
+    !Array.isArray(lastDp.filtered_heart)
+  ) {
+    return [];
   }
-  points.sort((a, b) => a[0] - b[0]);
-  if (points.length > 0) {
-    const latestTime = points[points.length - 1][0];
-    const fiveMinsAgo = latestTime - 5 * 60 * 1000;
-    return points.filter((p) => p[0] >= fiveMinsAgo);
+
+  const endTime = lastDp.timestamp.toDate().getTime();
+  const startTime = endTime - 20 * 1000; // 20 seconds
+  const numPoints = lastDp.filtered_heart.length;
+
+  const points = [];
+  for (let i = 0; i < numPoints; i++) {
+    const time =
+      startTime + (i / (numPoints > 1 ? numPoints - 1 : 1)) * 20 * 1000;
+    points.push([time, lastDp.filtered_heart[i]]);
   }
   return points;
 });
 
 const graphDataBR = computed(() => {
   if (!recentDocs.value || recentDocs.value.length === 0) return [];
-  const points = [];
   const latestDoc = recentDocs.value[0];
-  if (latestDoc.data_points) {
-    latestDoc.data_points.forEach((dp) => {
-      if (dp.timestamp && dp.timestamp.toDate && dp.filtered_breath != null) {
-        points.push([dp.timestamp.toDate().getTime(), dp.filtered_breath]);
-      }
-    });
+  if (!latestDoc.data_points || latestDoc.data_points.length === 0) return [];
+
+  const lastDp = latestDoc.data_points[latestDoc.data_points.length - 1];
+  if (
+    !lastDp ||
+    !lastDp.timestamp ||
+    !lastDp.timestamp.toDate ||
+    !Array.isArray(lastDp.filtered_breath)
+  ) {
+    return [];
   }
-  points.sort((a, b) => a[0] - b[0]);
-  if (points.length > 0) {
-    const latestTime = points[points.length - 1][0];
-    const fiveMinsAgo = latestTime - 5 * 60 * 1000;
-    return points.filter((p) => p[0] >= fiveMinsAgo);
+
+  const endTime = lastDp.timestamp.toDate().getTime();
+  const startTime = endTime - 20 * 1000; // 20 seconds
+  const numPoints = lastDp.filtered_breath.length;
+
+  const points = [];
+  for (let i = 0; i < numPoints; i++) {
+    const time =
+      startTime + (i / (numPoints > 1 ? numPoints - 1 : 1)) * 20 * 1000;
+    points.push([time, lastDp.filtered_breath[i]]);
   }
   return points;
 });
@@ -93,12 +110,16 @@ const chartOption = computed(() => {
   const pointsHR = graphDataHR.value;
   const pointsBR = graphDataBR.value;
 
-  // Force a common X-axis range across all graphs based on the latest received point
   let latestTime = Date.now();
+  let minTime = latestTime - 20 * 1000;
+
   if (pointsHR.length > 0) {
     latestTime = pointsHR[pointsHR.length - 1][0];
+    minTime = pointsHR[0][0];
+  } else if (pointsBR.length > 0) {
+    latestTime = pointsBR[pointsBR.length - 1][0];
+    minTime = pointsBR[0][0];
   }
-  const minTime = latestTime - 5 * 60 * 1000;
 
   return {
     title: {
