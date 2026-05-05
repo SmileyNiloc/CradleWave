@@ -248,6 +248,19 @@ def signal_processor(
                         if result["breathing_rate"]
                         else previous_export["breathing_rate"]
                     ),
+                    # Ensure we export the last valid point of the filtered arrays (flattened scalar for that frame)
+                    "filtered_heart": (
+                        list(result["filtered_heart"])
+                        if result["filtered_heart"] is not None
+                        and len(result["filtered_heart"]) > 0
+                        else 0
+                    ),
+                    "filtered_breath": (
+                        list(result["filtered_breath"])
+                        if result["filtered_breath"] is not None
+                        and len(result["filtered_breath"]) > 0
+                        else 0
+                    ),
                 }
                 previous_export = (
                     export  # Update previous values for the next iteration
