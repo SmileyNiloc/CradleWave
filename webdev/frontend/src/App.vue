@@ -19,6 +19,7 @@ provide("selectedSession", selection);
     <header class="app-header">
       <div class="header-content">
         <h1 class="app-title">
+          data
           <span class="icon">❤️</span>
           CradleWave
         </h1>

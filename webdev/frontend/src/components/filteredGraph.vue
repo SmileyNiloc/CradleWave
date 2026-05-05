@@ -1,6 +1,26 @@
 <template>
   <div v-if="selectedSession.deviceId != null" class="graph-container">
     <div class="graph-wrapper">
+      <div class="toggle-controls">
+        <button
+          :class="['toggle-btn', { active: displayMode === 'Both' }]"
+          @click="displayMode = 'Both'"
+        >
+          Both
+        </button>
+        <button
+          :class="['toggle-btn', { active: displayMode === 'Heart' }]"
+          @click="displayMode = 'Heart'"
+        >
+          Heart
+        </button>
+        <button
+          :class="['toggle-btn', { active: displayMode === 'Breath' }]"
+          @click="displayMode = 'Breath'"
+        >
+          Breathing
+        </button>
+      </div>
       <v-chart :option="chartOption" autoresize class="chart" />
       <div v-if="graphDataHR.length === 0" class="no-data-overlay">
         <p>No data available in this collection</p>
@@ -28,6 +48,8 @@ import { db } from "../utils/firebase.js";
 import VChart from "vue-echarts";
 
 const selectedSession = inject("selectedSession");
+
+const displayMode = ref("Both");
 
 const recentDocsRef = ref(null);
 const recentDocs = useCollection(recentDocsRef);
@@ -136,7 +158,13 @@ const chartOption = computed(() => {
     },
     legend: {
       data: ["Filtered Heart", "Filtered Breath"],
-      bottom: "5%"
+      bottom: "5%",
+      selected: {
+        "Filtered Heart":
+          displayMode.value === "Both" || displayMode.value === "Heart",
+        "Filtered Breath":
+          displayMode.value === "Both" || displayMode.value === "Breath"
+      }
     },
     grid: {
       left: "3%",
@@ -194,6 +222,38 @@ const chartOption = computed(() => {
 </script>
 
 <style scoped>
+.toggle-controls {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 10;
+  display: flex;
+  gap: 0.5rem;
+  background: #f8f9fa;
+  padding: 0.25rem;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+.toggle-btn {
+  background: transparent;
+  border: none;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #6c757d;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.toggle-btn:hover {
+  background: #e9ecef;
+  color: #495057;
+}
+.toggle-btn.active {
+  background: white;
+  color: #2c3e50;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
 .graph-container {
   width: 100%;
 }
