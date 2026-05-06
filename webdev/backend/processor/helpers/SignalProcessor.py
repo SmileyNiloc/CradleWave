@@ -138,7 +138,7 @@ class SignalProcessor:
             # Minimum distance between peaks = 0.4s = 1 sample at 2.5 Hz
             # This corresponds to max 150 bpm
             peaks, _ = find_peaks(
-                chunk, distance=int(0.2 * frame_rate), prominence=0.04
+                chunk, distance=int(0.2 * frame_rate), prominence=0.035
             )
 
             num_beats = int(len(peaks))
@@ -186,7 +186,7 @@ class SignalProcessor:
             # This corresponds to max 30 breaths/min
             # prominence = 0.15 = minimum amplitude for peak detection = 0.15
             peaks, _ = find_peaks(
-                current_window, distance=int(2 * frame_rate), prominence=0.04
+                current_window, distance=int(2 * frame_rate), prominence=0.035
             )
             # Mumber of peaks
             num_breaths = len(peaks)
