@@ -192,8 +192,8 @@ const chartOption = computed(() => {
       name: "Amplitude",
       nameTextStyle: { color: "#666", fontSize: 12, padding: [0, 0, 0, 10] },
       scale: true,
-      min: (value) => Math.min(value.min, -0.1),
-      max: (value) => Math.max(value.max, 0.1),
+      min: (value) => Math.min(value.min, -0.3),
+      max: (value) => Math.max(value.max, 0.3),
       axisLine: { lineStyle: { color: "#666" } },
       axisLabel: { color: "#666", fontSize: 11 },
       splitLine: { lineStyle: { color: "#e0e0e0", type: "dashed" } }
